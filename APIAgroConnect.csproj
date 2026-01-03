@@ -16,11 +16,7 @@
 	  </PackageReference>
 	  <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
 	  <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Application\Interfaces\" />
-    <Folder Include="Contracts\Models\" />
+	  <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
   </ItemGroup>
 
 </Project>

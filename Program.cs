@@ -49,6 +49,9 @@ builder.Services.AddDbContext<AgroDbContext>(options =>
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddScoped<IPdfTextExtractor, PdfPigTextExtractor>();
+builder.Services.AddScoped<IRecipePdfParser, RecipePdfParser>();
+builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()!;
 
