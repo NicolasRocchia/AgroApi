@@ -24,6 +24,36 @@ namespace APIAgroConnect.Infrastructure.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            modelBuilder.Entity<Recipe>(e =>
+            {
+                e.Property(x => x.TempMin).HasPrecision(10, 2);
+                e.Property(x => x.TempMax).HasPrecision(10, 2);
+                e.Property(x => x.HumidityMin).HasPrecision(10, 2);
+                e.Property(x => x.HumidityMax).HasPrecision(10, 2);
+                e.Property(x => x.WindMinKmh).HasPrecision(10, 2);
+                e.Property(x => x.WindMaxKmh).HasPrecision(10, 2);
+                e.Property(x => x.UnitSurfaceHa).HasPrecision(10, 2);
+            });
+
+            modelBuilder.Entity<RecipeProduct>(e =>
+            {
+                e.Property(x => x.DoseValue).HasPrecision(18, 6);
+                e.Property(x => x.TotalValue).HasPrecision(18, 6);
+            });
+
+            modelBuilder.Entity<RecipeSensitivePoint>(e =>
+            {
+                e.Property(x => x.Latitude).HasPrecision(10, 7);
+                e.Property(x => x.Longitude).HasPrecision(10, 7);
+            });
+
+            modelBuilder.Entity<RecipeLotVertex>(e =>
+            {
+                e.Property(x => x.Latitude).HasPrecision(10, 7);
+                e.Property(x => x.Longitude).HasPrecision(10, 7);
+            });
+
+
             /* =========================
                USER <-> ROLE (M:N)
                ========================= */
@@ -43,7 +73,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 .OnDelete(DeleteBehavior.NoAction);
 
             /* =========================
-               RECIPES RELATIONS
+               RELACIONES RECETAS
                ========================= */
             modelBuilder.Entity<Recipe>()
                 .HasOne(r => r.Requester)
@@ -85,6 +115,20 @@ namespace APIAgroConnect.Infrastructure.Data
                INDICES / UNIQUES
                ========================= */
 
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.EmailNormalized)
+                .IsUnique()
+                .HasFilter("[DeletedAt] IS NULL");
+
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.UserName)
+                .IsUnique()
+                .HasFilter("[DeletedAt] IS NULL");
+
+            modelBuilder.Entity<Role>()
+                .HasIndex(r => r.Name)
+                .IsUnique();
+
             modelBuilder.Entity<Recipe>()
                 .HasIndex(r => r.RfdNumber)
                 .IsUnique()
@@ -105,43 +149,24 @@ namespace APIAgroConnect.Infrastructure.Data
                 .IsUnique()
                 .HasFilter("[DeletedAt] IS NULL");
 
-            modelBuilder.Entity<Recipe>()
-                .Property(r => r.IssueDate)
-                .HasColumnType("date");
+            /* =========================
+               TIPOS DE COLUMNA (recomendado)
+               ========================= */
 
-            modelBuilder.Entity<Recipe>()
-                .Property(r => r.PossibleStartDate)
-                .HasColumnType("date");
+            modelBuilder.Entity<Recipe>().Property(x => x.IssueDate).HasColumnType("date");
+            modelBuilder.Entity<Recipe>().Property(x => x.PossibleStartDate).HasColumnType("date");
+            modelBuilder.Entity<Recipe>().Property(x => x.RecommendedDate).HasColumnType("date");
+            modelBuilder.Entity<Recipe>().Property(x => x.ExpirationDate).HasColumnType("date");
 
-            modelBuilder.Entity<Recipe>()
-                .Property(r => r.RecommendedDate)
-                .HasColumnType("date");
+            modelBuilder.Entity<Recipe>().Property(x => x.UnitSurfaceHa).HasColumnType("decimal(10,2)");
+            modelBuilder.Entity<RecipeLot>().Property(x => x.SurfaceHa).HasColumnType("decimal(10,2)");
 
-            modelBuilder.Entity<Recipe>()
-                .Property(r => r.ExpirationDate)
-                .HasColumnType("date");
-
-            modelBuilder.Entity<Recipe>()
-                .Property(r => r.UnitSurfaceHa)
-                .HasColumnType("decimal(10,2)");
-
-            modelBuilder.Entity<RecipeLot>()
-                .Property(l => l.SurfaceHa)
-                .HasColumnType("decimal(10,2)");
-
-            modelBuilder.Entity<RecipeLotVertex>()
-                .Property(v => v.Latitude)
-                .HasColumnType("decimal(10,7)");
-
-            modelBuilder.Entity<RecipeLotVertex>()
-                .Property(v => v.Longitude)
-                .HasColumnType("decimal(10,7)");
+            modelBuilder.Entity<RecipeLotVertex>().Property(x => x.Latitude).HasColumnType("decimal(10,7)");
+            modelBuilder.Entity<RecipeLotVertex>().Property(x => x.Longitude).HasColumnType("decimal(10,7)");
 
             /* =========================
-               GLOBAL SOFT DELETE FILTERS
-               =========================
-            */
-
+               QUERY FILTER GLOBAL (soft delete)
+               ========================= */
             modelBuilder.Entity<Requester>().HasQueryFilter(e => e.DeletedAt == null);
             modelBuilder.Entity<Advisor>().HasQueryFilter(e => e.DeletedAt == null);
             modelBuilder.Entity<Recipe>().HasQueryFilter(e => e.DeletedAt == null);
@@ -149,7 +174,6 @@ namespace APIAgroConnect.Infrastructure.Data
             modelBuilder.Entity<RecipeLot>().HasQueryFilter(e => e.DeletedAt == null);
             modelBuilder.Entity<RecipeLotVertex>().HasQueryFilter(e => e.DeletedAt == null);
             modelBuilder.Entity<RecipeSensitivePoint>().HasQueryFilter(e => e.DeletedAt == null);
-
         }
     }
 }

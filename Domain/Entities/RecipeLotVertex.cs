@@ -8,5 +8,7 @@
         public int Order { get; set; }
         public decimal Latitude { get; set; }
         public decimal Longitude { get; set; }
+
+        public ICollection<RecipeLotVertex> Vertices { get; set; } = new List<RecipeLotVertex>();
     }
 }

@@ -1,6 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-
-namespace APIAgroConnect.Application.Interfaces
+﻿namespace APIAgroConnect.Application.Interfaces
 {
     public interface IRecipeImportService
     {

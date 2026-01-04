@@ -4,6 +4,6 @@ namespace APIAgroConnect.Application.Interfaces
 {
     public interface IRecipePdfParser
     {
-        ParsedRecipe Parse(string pdfText);
+        ParsedRecipe Parse(Stream pdfStream, string rawText);
     }
 }

@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace APIAgroConnect.Domain.Entities
+﻿namespace APIAgroConnect.Domain.Entities
 {
     public class Recipe : BaseAuditableEntity
     {

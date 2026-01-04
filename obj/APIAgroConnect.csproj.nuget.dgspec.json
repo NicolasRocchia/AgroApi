@@ -72,13 +72,13 @@
               "target": "Package",
               "version": "[8.0.8, )"
             },
+            "PdfPig": {
+              "target": "Package",
+              "version": "[0.1.13, )"
+            },
             "Swashbuckle.AspNetCore": {
               "target": "Package",
               "version": "[6.6.2, )"
-            },
-            "UglyToad.PdfPig": {
-              "target": "Package",
-              "version": "[1.7.0-custom-5, )"
             }
           },
           "imports": [

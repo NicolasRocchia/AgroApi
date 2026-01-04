@@ -4,6 +4,7 @@ using APIAgroConnect.Common.Security;
 using APIAgroConnect.Infrastructure.Data;
 using APIAgroConnect.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -25,7 +26,7 @@ builder.Services.AddSwaggerGen(c =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Pegá: Bearer {tu_token}"
+        Description = "Pegá: Bearer {token}"
     });
 
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -44,6 +45,18 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+{
+    Console.WriteLine("UnhandledException: " + e.ExceptionObject);
+};
+
+TaskScheduler.UnobservedTaskException += (sender, e) =>
+{
+    Console.WriteLine("UnobservedTaskException: " + e.Exception);
+    e.SetObserved();
+};
+
+
 builder.Services.AddDbContext<AgroDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
@@ -52,6 +65,7 @@ builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IPdfTextExtractor, PdfPigTextExtractor>();
 builder.Services.AddScoped<IRecipePdfParser, RecipePdfParser>();
 builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
+builder.Services.AddScoped<PdfLotsExtractor>();
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()!;
 
@@ -81,12 +95,37 @@ builder.Services
 builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+builder.Services.AddCors(o =>
+{
+    o.AddPolicy("dev", p =>
+        p.AllowAnyOrigin()
+         .AllowAnyHeader()
+         .AllowAnyMethod());
+});
+
+
+
+builder.Services.Configure<FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = 50_000_000; // 50 MB
+    o.ValueLengthLimit = int.MaxValue;
+    o.MultipartHeadersLengthLimit = int.MaxValue;
+});
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 50_000_000; // 50 MB
+});
+
 var app = builder.Build();
+
+app.UseCors("dev");
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.UseDeveloperExceptionPage();
 }
 
 app.UseHttpsRedirection();
