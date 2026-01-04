@@ -74,6 +74,18 @@
         }
       }
     },
+    "/api/Recipes/ef-test": {
+      "get": {
+        "tags": [
+          "Recipes"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/Recipes/import-pdf": {
       "post": {
         "tags": [

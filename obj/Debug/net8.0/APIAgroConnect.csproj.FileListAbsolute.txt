@@ -20,6 +20,7 @@ D:\Programacion\AGRO\API\APIAgroConnect_V1\bin\Debug\net8.0\Azure.Identity.dll
 D:\Programacion\AGRO\API\APIAgroConnect_V1\bin\Debug\net8.0\BCrypt.Net-Next.dll
 D:\Programacion\AGRO\API\APIAgroConnect_V1\bin\Debug\net8.0\Humanizer.dll
 D:\Programacion\AGRO\API\APIAgroConnect_V1\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+D:\Programacion\AGRO\API\APIAgroConnect_V1\bin\Debug\net8.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
 D:\Programacion\AGRO\API\APIAgroConnect_V1\bin\Debug\net8.0\Microsoft.Bcl.AsyncInterfaces.dll
 D:\Programacion\AGRO\API\APIAgroConnect_V1\bin\Debug\net8.0\Microsoft.CodeAnalysis.dll
 D:\Programacion\AGRO\API\APIAgroConnect_V1\bin\Debug\net8.0\Microsoft.CodeAnalysis.CSharp.dll
@@ -141,10 +142,10 @@ D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\staticwebassets.buil
 D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\staticwebassets.development.json
 D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\staticwebassets.build.endpoints.json
 D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\swae.build.ex.cache
-D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
 D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\APIAgroC.EE896528.Up2Date
 D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\APIAgroConnect.dll
 D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\refint\APIAgroConnect.dll
 D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\APIAgroConnect.pdb
 D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\APIAgroConnect.genruntimeconfig.cache
 D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\ref\APIAgroConnect.dll
+D:\Programacion\AGRO\API\APIAgroConnect_V1\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt

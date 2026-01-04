@@ -1,7 +1,9 @@
 ﻿using APIAgroConnect.Application.Interfaces;
 using APIAgroConnect.Contracts.Requests;
+using APIAgroConnect.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace APIAgroConnect.Controllers
@@ -11,10 +13,12 @@ namespace APIAgroConnect.Controllers
     public class RecipesController : ControllerBase
     {
         private readonly IRecipeImportService _importService;
+        private readonly AgroDbContext _db;
 
-        public RecipesController(IRecipeImportService importService)
+        public RecipesController(IRecipeImportService importService, AgroDbContext db)
         {
             _importService = importService;
+            _db = db;
         }
 
         [HttpPost("upload-test")]
@@ -32,6 +36,17 @@ namespace APIAgroConnect.Controllers
                 length = request.Pdf.Length,
                 bytesRead = ms.Length
             });
+        }
+
+        [HttpGet("ef-test")]
+        public async Task<IActionResult> EfTest()
+        {
+            var id = await _db.Requesters
+                .AsNoTracking()
+                .Select(x => x.Id)
+                .FirstOrDefaultAsync();
+
+            return Ok(id);
         }
 
 

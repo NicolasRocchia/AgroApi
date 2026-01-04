@@ -32,6 +32,10 @@
         public decimal? WindMaxKmh { get; set; }
         public string? WindDirection { get; set; }
 
+        public string? MachinePlate { get; set; }        // nvarchar(50) NULL
+        public string? MachineLegalName { get; set; }    // nvarchar(200) NULL
+        public string? MachineType { get; set; }
+
         public string? Notes { get; set; }
 
         public ICollection<RecipeProduct> Products { get; set; } = new List<RecipeProduct>();

@@ -98,14 +98,16 @@ namespace APIAgroConnect.Application.Services
                 recipe.UpdatedByUserId = actorUserId;
             }
 
-            // Si la receta es nueva, necesitás Id antes de colgar hijos (EF lo maneja igual),
-            // pero dejamos este SaveChanges para asegurar consistencia
-            await _db.SaveChangesAsync();
-
+            // ✅ IMPORTANTE: Mapear header ANTES del SaveChanges que inserta/actualiza Recipe
             MapRecipeHeader(recipe, parsed, requester, advisor);
 
-            // OJO: como tenés query filters, si querés borrar hijos activos de forma consistente
-            // lo ideal es operar sobre los hijos actualmente incluidos (activos). Ya está ok.
+            // ✅ Hardening: nunca permitir null/empty en Status (DB: NOT NULL)
+            recipe.Status = string.IsNullOrWhiteSpace(recipe.Status) ? "ABIERTA" : recipe.Status.Trim();
+
+            // Guardar receta (si es nueva, se inserta acá con Status ya seteado)
+            await _db.SaveChangesAsync();
+
+            // Soft delete de hijos actuales + alta de nuevos
             SoftDeleteChildren(recipe, now, actorUserId);
             AddChildrenFromParsed(recipe, parsed, now, actorUserId);
 
@@ -125,14 +127,16 @@ namespace APIAgroConnect.Application.Services
             if (string.IsNullOrWhiteSpace(parsed.RequesterTaxId))
                 throw new InvalidOperationException("El PDF no trae CUIT/CUIL del solicitante.");
 
-            // Importante: ignorar query filters para encontrar soft-deleted y revivir
-            var requester = await _db.Requesters
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(x => x.TaxId == parsed.RequesterTaxId);
+            // Buscar SOLO el Id (rápido)
+            var requesterId = await _db.Requesters
+                .Where(x => x.TaxId == parsed.RequesterTaxId)
+                .Select(x => x.Id)
+                .FirstOrDefaultAsync();
 
-            if (requester is null)
+            // No existe (ni activo ni soft-deleted)
+            if (requesterId == 0)
             {
-                requester = new Requester
+                var requesterNew = new Requester
                 {
                     LegalName = parsed.RequesterName ?? "",
                     TaxId = parsed.RequesterTaxId,
@@ -141,23 +145,29 @@ namespace APIAgroConnect.Application.Services
                     CreatedAt = now,
                     CreatedByUserId = actorUserId
                 };
-                _db.Requesters.Add(requester);
+
+                _db.Requesters.Add(requesterNew);
+                return requesterNew;
             }
-            else
+
+            // Existe: traer entidad completa (incluye soft-deleted)
+            var requester = await _db.Requesters
+                .IgnoreQueryFilters()
+                .FirstAsync(x => x.Id == requesterId);
+
+            // Revivir si estaba soft-deleted
+            if (requester.DeletedAt != null)
             {
-                // Revivir si estaba soft-deleted
-                if (requester.DeletedAt != null)
-                {
-                    requester.DeletedAt = null;
-                    requester.DeletedByUserId = null;
-                }
-
-                if (!string.IsNullOrWhiteSpace(parsed.RequesterName))
-                    requester.LegalName = parsed.RequesterName;
-
-                requester.UpdatedAt = now;
-                requester.UpdatedByUserId = actorUserId;
+                requester.DeletedAt = null;
+                requester.DeletedByUserId = null;
             }
+
+            // Actualizar datos
+            if (!string.IsNullOrWhiteSpace(parsed.RequesterName))
+                requester.LegalName = parsed.RequesterName;
+
+            requester.UpdatedAt = now;
+            requester.UpdatedByUserId = actorUserId;
 
             return requester;
         }
@@ -167,7 +177,6 @@ namespace APIAgroConnect.Application.Services
             if (string.IsNullOrWhiteSpace(parsed.AdvisorLicense))
                 throw new InvalidOperationException("El PDF no trae matrícula (M.P.) del asesor.");
 
-            // Importante: ignorar query filters para encontrar soft-deleted y revivir
             var advisor = await _db.Advisors
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(x => x.LicenseNumber == parsed.AdvisorLicense);
@@ -205,9 +214,10 @@ namespace APIAgroConnect.Application.Services
 
         private static void MapRecipeHeader(Recipe recipe, ParsedRecipe parsed, Requester requester, Advisor advisor)
         {
+            // ✅ parsed.Status puede venir ok, pero nunca lo dejamos null
             recipe.Status = parsed.Status;
 
-            // En entidades Recipe estos campos son DateTime y EF los persiste como DATE por HasColumnType("date")
+            // En entidades Recipe estos campos son DateTime y EF los persiste como DATE
             recipe.IssueDate = parsed.IssueDate.ToDateTime(TimeOnly.MinValue);
             recipe.PossibleStartDate = parsed.PossibleStartDate?.ToDateTime(TimeOnly.MinValue);
             recipe.RecommendedDate = parsed.RecommendedDate?.ToDateTime(TimeOnly.MinValue);
@@ -237,16 +247,13 @@ namespace APIAgroConnect.Application.Services
 
         private static void SoftDeleteChildren(Recipe recipe, DateTime now, long actorUserId)
         {
-            // Productos
             foreach (var p in recipe.Products)
             {
                 if (p.DeletedAt != null) continue;
-
                 p.DeletedAt = now;
                 p.DeletedByUserId = actorUserId;
             }
 
-            // Lotes + vértices
             foreach (var lot in recipe.Lots)
             {
                 if (lot.DeletedAt == null)
@@ -258,17 +265,13 @@ namespace APIAgroConnect.Application.Services
                 foreach (var v in lot.Vertices)
                 {
                     if (v.DeletedAt != null) continue;
-
                     v.DeletedAt = now;
-                    v.DeletedByUserId = actorUserId;
                 }
             }
 
-            // Puntos sensibles
             foreach (var sp in recipe.SensitivePoints)
             {
                 if (sp.DeletedAt != null) continue;
-
                 sp.DeletedAt = now;
                 sp.DeletedByUserId = actorUserId;
             }
@@ -317,12 +320,13 @@ namespace APIAgroConnect.Application.Services
                         Latitude = v.Latitude,
                         Longitude = v.Longitude,
                         CreatedAt = now,
-                        CreatedByUserId = actorUserId
                     });
                 }
 
                 recipe.Lots.Add(lot);
             }
+
+            
         }
     }
 }

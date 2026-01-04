@@ -281,15 +281,15 @@ namespace APIAgroConnect.Application.Services
         private static string JoinInRange(IEnumerable<Word> row, double xStart, double xEnd)
         {
             var parts = row
-                .Where(w =>
-                {
-                    var x = (w.BoundingBox.Left + w.BoundingBox.Right) / 2.0; // centro X
-                    return x >= xStart && x < xEnd;
-                })
-                .OrderBy(w => w.BoundingBox.Left)
-                .Select(w => w.Text.Trim())
-                .Where(t => !string.IsNullOrWhiteSpace(t))
-                .ToList();
+         .Where(w =>
+         {
+             // ✅ Usar solape: si el word toca el rango de la columna, lo tomamos
+             return w.BoundingBox.Right > xStart && w.BoundingBox.Left < xEnd;
+         })
+         .OrderBy(w => w.BoundingBox.Left)
+         .Select(w => w.Text.Trim())
+         .Where(t => !string.IsNullOrWhiteSpace(t))
+         .ToList();
 
             return string.Join(" ", parts).Trim();
         }

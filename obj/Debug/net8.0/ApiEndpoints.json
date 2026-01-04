@@ -17,6 +17,16 @@
   },
   {
     "ContainingType": "APIAgroConnect.Controllers.RecipesController",
+    "Method": "EfTest",
+    "RelativePath": "api/Recipes/ef-test",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "APIAgroConnect.Controllers.RecipesController",
     "Method": "ImportPdf",
     "RelativePath": "api/Recipes/import-pdf",
     "HttpMethod": "POST",
