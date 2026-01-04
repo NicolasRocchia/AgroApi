@@ -21,35 +21,6 @@ namespace APIAgroConnect.Controllers
             _db = db;
         }
 
-        [HttpPost("upload-test")]
-        [AllowAnonymous]
-        [Consumes("multipart/form-data")]
-        public async Task<IActionResult> UploadTest([FromForm] ImportRecipePdfRequest request)
-        {
-            // Solo lee bytes, no parsea PDF
-            await using var ms = new MemoryStream();
-            await request.Pdf.CopyToAsync(ms);
-
-            return Ok(new
-            {
-                fileName = request.Pdf.FileName,
-                length = request.Pdf.Length,
-                bytesRead = ms.Length
-            });
-        }
-
-        [HttpGet("ef-test")]
-        public async Task<IActionResult> EfTest()
-        {
-            var id = await _db.Requesters
-                .AsNoTracking()
-                .Select(x => x.Id)
-                .FirstOrDefaultAsync();
-
-            return Ok(id);
-        }
-
-
         [HttpPost("import-pdf")]
         [Authorize]
         [RequestSizeLimit(50_000_000)]
