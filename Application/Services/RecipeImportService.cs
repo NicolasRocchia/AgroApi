@@ -67,7 +67,7 @@ namespace APIAgroConnect.Application.Services
             // Buscar receta por RfdNumber INCLUYENDO soft-deleted, para poder revivirla
             var recipe = await _db.Recipes
                 .IgnoreQueryFilters()
-                .Include(r => r.Products)
+                .Include(r => r.Products) // RecipeProducts
                 .Include(r => r.Lots).ThenInclude(l => l.Vertices)
                 .Include(r => r.SensitivePoints)
                 .FirstOrDefaultAsync(r => r.RfdNumber == parsed.RfdNumber);
@@ -109,7 +109,7 @@ namespace APIAgroConnect.Application.Services
 
             // Soft delete de hijos actuales + alta de nuevos
             SoftDeleteChildren(recipe, now, actorUserId);
-            AddChildrenFromParsed(recipe, parsed, now, actorUserId);
+            await AddChildrenFromParsedAsync(recipe, parsed, now, actorUserId);
 
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
@@ -212,6 +212,63 @@ namespace APIAgroConnect.Application.Services
             return advisor;
         }
 
+        private async Task<Product> UpsertProductAsync(ParsedProduct parsedProduct, long actorUserId, DateTime now)
+        {
+            var senasa = parsedProduct.SenasaRegistry?.Trim();
+            var name = (parsedProduct.ProductName ?? "").Trim();
+            var tox = parsedProduct.ToxicologicalClass?.Trim();
+
+            if (string.IsNullOrWhiteSpace(name))
+                throw new InvalidOperationException("El PDF trae un producto sin nombre.");
+
+            Product? product;
+
+            if (!string.IsNullOrWhiteSpace(senasa))
+            {
+                product = await _db.Products
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(x => x.SenasaRegistry == senasa);
+            }
+            else
+            {
+                product = await _db.Products
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(x =>
+                        x.SenasaRegistry == null &&
+                        x.ProductName == name &&
+                        (x.ToxicologicalClass ?? "") == (tox ?? ""));
+            }
+
+            if (product is null)
+            {
+                product = new Product
+                {
+                    SenasaRegistry = string.IsNullOrWhiteSpace(senasa) ? null : senasa,
+                    ProductName = name,
+                    ToxicologicalClass = tox,
+                    CreatedAt = now,
+                    CreatedByUserId = actorUserId
+                };
+
+                _db.Products.Add(product);
+                return product;
+            }
+
+            if (product.DeletedAt != null)
+            {
+                product.DeletedAt = null;
+                product.DeletedByUserId = null;
+            }
+
+            product.ProductName = name;
+            product.ToxicologicalClass = tox;
+            product.UpdatedAt = now;
+            product.UpdatedByUserId = actorUserId;
+
+            return product;
+        }
+
+
         private static void MapRecipeHeader(Recipe recipe, ParsedRecipe parsed, Requester requester, Advisor advisor)
         {
             // ✅ parsed.Status puede venir ok, pero nunca lo dejamos null
@@ -231,6 +288,11 @@ namespace APIAgroConnect.Application.Services
             recipe.Diagnosis = parsed.Diagnosis;
             recipe.Treatment = parsed.Treatment;
             recipe.MachineToUse = parsed.MachineToUse;
+
+            // Estos 3 existen en tu tabla Recipes (y ya los mapeaste en DbContext)
+            recipe.MachinePlate = parsed.MachinePlate;
+            recipe.MachineLegalName = parsed.MachineLegalName;
+            recipe.MachineType = parsed.MachineType;
 
             recipe.UnitSurfaceHa = parsed.UnitSurfaceHa;
 
@@ -277,22 +339,29 @@ namespace APIAgroConnect.Application.Services
             }
         }
 
-        private static void AddChildrenFromParsed(Recipe recipe, ParsedRecipe parsed, DateTime now, long actorUserId)
+        private async Task AddChildrenFromParsedAsync(Recipe recipe, ParsedRecipe parsed, DateTime now, long actorUserId)
         {
-            // Productos
+            // Productos (RecipeProducts) -> ahora referencian catálogo Products
             foreach (var p in parsed.Products)
             {
+                var product = await UpsertProductAsync(p, actorUserId, now);
+
                 recipe.Products.Add(new RecipeProduct
                 {
+                    Product = product,              // o ProductId = product.Id
                     ProductType = p.ProductType,
-                    ProductName = p.ProductName,
-                    SenasaRegistry = p.SenasaRegistry,
-                    ToxicologicalClass = p.ToxicologicalClass,
+
+                    // 👇👇👇 IMPORTANTE  (NOT NULL en ProductName)
+                    ProductName = product.ProductName,
+                    SenasaRegistry = product.SenasaRegistry,
+                    ToxicologicalClass = product.ToxicologicalClass,
+
                     DoseValue = p.DoseValue,
                     DoseUnit = p.DoseUnit,
                     DosePerUnit = p.DosePerUnit,
                     TotalValue = p.TotalValue,
                     TotalUnit = p.TotalUnit,
+
                     CreatedAt = now,
                     CreatedByUserId = actorUserId
                 });
@@ -326,7 +395,8 @@ namespace APIAgroConnect.Application.Services
                 recipe.Lots.Add(lot);
             }
 
-            
+            // Si más adelante parseás puntos sensibles, se agregan acá.
+            // foreach (var sp in parsed.SensitivePoints) ...
         }
     }
 }

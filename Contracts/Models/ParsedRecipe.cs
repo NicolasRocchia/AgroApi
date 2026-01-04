@@ -21,6 +21,9 @@
         public string? Diagnosis { get; set; }
         public string? Treatment { get; set; }
         public string? MachineToUse { get; set; }
+        public string? MachinePlate { get; set; }        // nvarchar(50) NULL
+        public string? MachineLegalName { get; set; }    // nvarchar(200) NULL
+        public string? MachineType { get; set; }         // nvarchar(100) NULL
 
         public decimal? UnitSurfaceHa { get; set; }
 

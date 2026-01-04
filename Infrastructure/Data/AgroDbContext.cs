@@ -21,6 +21,9 @@ namespace APIAgroConnect.Infrastructure.Data
         public DbSet<RecipeLotVertex> RecipeLotVertices => Set<RecipeLotVertex>();
         public DbSet<RecipeSensitivePoint> RecipeSensitivePoints => Set<RecipeSensitivePoint>();
 
+        // ✅ Catálogo global
+        public DbSet<Product> Products => Set<Product>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.HasDefaultSchema("dbo");
@@ -192,9 +195,12 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.Diagnosis).HasMaxLength(150);
                 b.Property(x => x.Treatment).HasMaxLength(150);
                 b.Property(x => x.MachineToUse).HasMaxLength(100);
-                b.Property(x => x. MachinePlate).HasMaxLength(50);
+
+                // ✅ Fix: había un espacio en tu código (x => x. MachinePlate). Lo corrijo:
+                b.Property(x => x.MachinePlate).HasMaxLength(50);
                 b.Property(x => x.MachineLegalName).HasMaxLength(200);
                 b.Property(x => x.MachineType).HasMaxLength(100);
+
                 b.Property(x => x.WindDirection).HasMaxLength(50);
 
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
@@ -228,17 +234,38 @@ namespace APIAgroConnect.Infrastructure.Data
             });
 
             /* ==========================================================
-             * RECIPE PRODUCTS
+             * PRODUCTS (CATÁLOGO GLOBAL)
+             * ========================================================== */
+            modelBuilder.Entity<Product>(b =>
+            {
+                b.ToTable("Products");
+                b.HasKey(x => x.Id);
+
+                b.Property(x => x.SenasaRegistry).HasMaxLength(50);
+                b.Property(x => x.ProductName).HasMaxLength(200).IsRequired();
+                b.Property(x => x.ToxicologicalClass).HasMaxLength(100);
+
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.HasQueryFilter(x => x.DeletedAt == null);
+
+                b.HasIndex(x => x.SenasaRegistry)
+                    .IsUnique()
+                    .HasFilter("[DeletedAt] IS NULL AND [SenasaRegistry] IS NOT NULL");
+            });
+
+            /* ==========================================================
+             * RECIPE PRODUCTS (PUENTE)
              * ========================================================== */
             modelBuilder.Entity<RecipeProduct>(b =>
             {
                 b.ToTable("RecipeProducts");
                 b.HasKey(x => x.Id);
 
-                b.Property(x => x.ProductType).HasMaxLength(50);
                 b.Property(x => x.ProductName).HasMaxLength(200).IsRequired();
                 b.Property(x => x.SenasaRegistry).HasMaxLength(50);
                 b.Property(x => x.ToxicologicalClass).HasMaxLength(100);
+
+                b.Property(x => x.ProductType).HasMaxLength(50);
 
                 b.Property(x => x.DoseValue).HasPrecision(18, 6);
                 b.Property(x => x.TotalValue).HasPrecision(18, 6);
@@ -254,6 +281,15 @@ namespace APIAgroConnect.Infrastructure.Data
                     .WithMany(r => r.Products)
                     .HasForeignKey(x => x.RecipeId)
                     .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasOne(x => x.Product)
+                    .WithMany(p => p.RecipeProducts)
+                    .HasForeignKey(x => x.ProductId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasIndex(x => new { x.RecipeId, x.ProductId })
+                    .IsUnique()
+                    .HasFilter("[DeletedAt] IS NULL");
             });
 
             /* ==========================================================
@@ -326,6 +362,5 @@ namespace APIAgroConnect.Infrastructure.Data
                     .OnDelete(DeleteBehavior.NoAction);
             });
         }
-
     }
 }
