@@ -62,7 +62,6 @@ namespace APIAgroConnect.Application.Services
                 if (xNombre < 0 || xSup < 0 || xLoc < 0 || xDept < 0 || xOrden < 0 || xLat < 0 || xLon < 0)
                     continue;
 
-                // 👇 FIX: ordenar y calcular "End" por la siguiente columna real
                 var cols = new List<(string key, double x)>
                 {
                     ("NOMBRE", xNombre),
@@ -73,14 +72,25 @@ namespace APIAgroConnect.Application.Services
                     ("LATITUD", xLat),
                     ("LONGITUD", xLon),
                 }
+                .Where(c => c.x >= 0)
                 .OrderBy(c => c.x)
                 .ToList();
 
-                double Start(string k) => cols.First(c => c.key == k).x;
+                double Mid(double a, double b) => (a + b) / 2.0;
+
+                double Start(string k)
+                {
+                    var idx = cols.FindIndex(c => c.key == k);
+                    if (idx <= 0) return double.NegativeInfinity;
+                    return Mid(cols[idx - 1].x, cols[idx].x);
+                }
+
                 double End(string k)
                 {
                     var idx = cols.FindIndex(c => c.key == k);
-                    return (idx >= 0 && idx < cols.Count - 1) ? cols[idx + 1].x : double.MaxValue;
+                    if (idx < 0) return double.PositiveInfinity;
+                    if (idx >= cols.Count - 1) return double.PositiveInfinity;
+                    return Mid(cols[idx].x, cols[idx + 1].x);
                 }
 
                 // 4) Construir rangos por “siguiente columna”

@@ -43,7 +43,7 @@ namespace APIAgroConnect.Application.Services
                 rawText = await _extractor.ExtractTextAsync(textStream);
             }
 
-            // 2) Parsear completo (texto + stream para tabla)
+            // 2) Parsear completo (texto + stream para tablas)
             ParsedRecipe parsed;
             await using (var parseStream = new MemoryStream(bytes, writable: false))
             {
@@ -57,10 +57,16 @@ namespace APIAgroConnect.Application.Services
 
             await using var tx = await _db.Database.BeginTransactionAsync();
 
+            // Upsert de Requester/Advisor (incluye revivir soft-deleted)
             var requester = await UpsertRequesterAsync(parsed, actorUserId, now);
             var advisor = await UpsertAdvisorAsync(parsed, actorUserId, now);
 
+            // Guardar para asegurar IDs si eran nuevos
+            await _db.SaveChangesAsync();
+
+            // Buscar receta por RfdNumber INCLUYENDO soft-deleted, para poder revivirla
             var recipe = await _db.Recipes
+                .IgnoreQueryFilters()
                 .Include(r => r.Products)
                 .Include(r => r.Lots).ThenInclude(l => l.Vertices)
                 .Include(r => r.SensitivePoints)
@@ -81,15 +87,25 @@ namespace APIAgroConnect.Application.Services
             }
             else
             {
+                // Revivir si estaba soft-deleted
+                if (recipe.DeletedAt != null)
+                {
+                    recipe.DeletedAt = null;
+                    recipe.DeletedByUserId = null;
+                }
+
                 recipe.UpdatedAt = now;
                 recipe.UpdatedByUserId = actorUserId;
             }
 
-            // Asegurar IDs si Requester/Advisor son nuevos
+            // Si la receta es nueva, necesitás Id antes de colgar hijos (EF lo maneja igual),
+            // pero dejamos este SaveChanges para asegurar consistencia
             await _db.SaveChangesAsync();
 
             MapRecipeHeader(recipe, parsed, requester, advisor);
 
+            // OJO: como tenés query filters, si querés borrar hijos activos de forma consistente
+            // lo ideal es operar sobre los hijos actualmente incluidos (activos). Ya está ok.
             SoftDeleteChildren(recipe, now, actorUserId);
             AddChildrenFromParsed(recipe, parsed, now, actorUserId);
 
@@ -109,7 +125,9 @@ namespace APIAgroConnect.Application.Services
             if (string.IsNullOrWhiteSpace(parsed.RequesterTaxId))
                 throw new InvalidOperationException("El PDF no trae CUIT/CUIL del solicitante.");
 
+            // Importante: ignorar query filters para encontrar soft-deleted y revivir
             var requester = await _db.Requesters
+                .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(x => x.TaxId == parsed.RequesterTaxId);
 
             if (requester is null)
@@ -127,6 +145,13 @@ namespace APIAgroConnect.Application.Services
             }
             else
             {
+                // Revivir si estaba soft-deleted
+                if (requester.DeletedAt != null)
+                {
+                    requester.DeletedAt = null;
+                    requester.DeletedByUserId = null;
+                }
+
                 if (!string.IsNullOrWhiteSpace(parsed.RequesterName))
                     requester.LegalName = parsed.RequesterName;
 
@@ -142,7 +167,9 @@ namespace APIAgroConnect.Application.Services
             if (string.IsNullOrWhiteSpace(parsed.AdvisorLicense))
                 throw new InvalidOperationException("El PDF no trae matrícula (M.P.) del asesor.");
 
+            // Importante: ignorar query filters para encontrar soft-deleted y revivir
             var advisor = await _db.Advisors
+                .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(x => x.LicenseNumber == parsed.AdvisorLicense);
 
             if (advisor is null)
@@ -159,6 +186,13 @@ namespace APIAgroConnect.Application.Services
             }
             else
             {
+                // Revivir si estaba soft-deleted
+                if (advisor.DeletedAt != null)
+                {
+                    advisor.DeletedAt = null;
+                    advisor.DeletedByUserId = null;
+                }
+
                 if (!string.IsNullOrWhiteSpace(parsed.AdvisorName))
                     advisor.FullName = parsed.AdvisorName;
 
@@ -173,6 +207,7 @@ namespace APIAgroConnect.Application.Services
         {
             recipe.Status = parsed.Status;
 
+            // En entidades Recipe estos campos son DateTime y EF los persiste como DATE por HasColumnType("date")
             recipe.IssueDate = parsed.IssueDate.ToDateTime(TimeOnly.MinValue);
             recipe.PossibleStartDate = parsed.PossibleStartDate?.ToDateTime(TimeOnly.MinValue);
             recipe.RecommendedDate = parsed.RecommendedDate?.ToDateTime(TimeOnly.MinValue);
@@ -202,23 +237,38 @@ namespace APIAgroConnect.Application.Services
 
         private static void SoftDeleteChildren(Recipe recipe, DateTime now, long actorUserId)
         {
+            // Productos
             foreach (var p in recipe.Products)
             {
+                if (p.DeletedAt != null) continue;
+
                 p.DeletedAt = now;
                 p.DeletedByUserId = actorUserId;
             }
 
+            // Lotes + vértices
             foreach (var lot in recipe.Lots)
             {
-                foreach (var v in lot.Vertices)
-                    v.DeletedAt = now;
+                if (lot.DeletedAt == null)
+                {
+                    lot.DeletedAt = now;
+                    lot.DeletedByUserId = actorUserId;
+                }
 
-                lot.DeletedAt = now;
-                lot.DeletedByUserId = actorUserId;
+                foreach (var v in lot.Vertices)
+                {
+                    if (v.DeletedAt != null) continue;
+
+                    v.DeletedAt = now;
+                    v.DeletedByUserId = actorUserId;
+                }
             }
 
+            // Puntos sensibles
             foreach (var sp in recipe.SensitivePoints)
             {
+                if (sp.DeletedAt != null) continue;
+
                 sp.DeletedAt = now;
                 sp.DeletedByUserId = actorUserId;
             }
@@ -226,6 +276,7 @@ namespace APIAgroConnect.Application.Services
 
         private static void AddChildrenFromParsed(Recipe recipe, ParsedRecipe parsed, DateTime now, long actorUserId)
         {
+            // Productos
             foreach (var p in parsed.Products)
             {
                 recipe.Products.Add(new RecipeProduct
@@ -244,6 +295,7 @@ namespace APIAgroConnect.Application.Services
                 });
             }
 
+            // Lotes + vértices
             foreach (var l in parsed.Lots)
             {
                 var lot = new RecipeLot
@@ -264,7 +316,8 @@ namespace APIAgroConnect.Application.Services
                         Order = v.Order,
                         Latitude = v.Latitude,
                         Longitude = v.Longitude,
-                        CreatedAt = now
+                        CreatedAt = now,
+                        CreatedByUserId = actorUserId
                     });
                 }
 

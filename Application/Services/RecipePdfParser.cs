@@ -193,10 +193,28 @@ namespace APIAgroConnect.Application.Services
                     var (locality, department) =
                         ParseLocalityAndDepartment(r.Localidad, r.Departamento, normalizedText);
 
+                    decimal? surfaceHa = r.SuperficieHa;
+                    var lotName = nombre;
+
+                    if (surfaceHa is null)
+                    {
+                        var m = Regex.Match(lotName, @"\s(?<ha>[0-9]+(?:[\.,][0-9]+)?)\s*$");
+                        if (m.Success)
+                        {
+                            var haTxt = m.Groups["ha"].Value;
+                            var parsedHa = ParseDecimalNullable(haTxt);
+                            if (parsedHa is not null)
+                            {
+                                surfaceHa = parsedHa;
+                                lotName = lotName.Substring(0, m.Index).Trim();
+                            }
+                        }
+                    }
+
                     current = new ParsedLot
                     {
-                        LotName = TitleCaseSafe(nombre),
-                        SurfaceHa = r.SuperficieHa,
+                        LotName = TitleCaseSafe(lotName),
+                        SurfaceHa = surfaceHa,
                         Locality = locality,
                         Department = department,
                         Vertices = new List<ParsedVertex>()
