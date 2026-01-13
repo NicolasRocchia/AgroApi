@@ -17,39 +17,8 @@
   },
   {
     "ContainingType": "APIAgroConnect.Controllers.RecipesController",
-    "Method": "EfTest",
-    "RelativePath": "api/Recipes/ef-test",
-    "HttpMethod": "GET",
-    "IsController": true,
-    "Order": 0,
-    "Parameters": [],
-    "ReturnTypes": []
-  },
-  {
-    "ContainingType": "APIAgroConnect.Controllers.RecipesController",
     "Method": "ImportPdf",
     "RelativePath": "api/Recipes/import-pdf",
-    "HttpMethod": "POST",
-    "IsController": true,
-    "Order": 0,
-    "Parameters": [
-      {
-        "Name": "Pdf",
-        "Type": "Microsoft.AspNetCore.Http.IFormFile",
-        "IsRequired": false
-      },
-      {
-        "Name": "DryRun",
-        "Type": "System.Boolean",
-        "IsRequired": false
-      }
-    ],
-    "ReturnTypes": []
-  },
-  {
-    "ContainingType": "APIAgroConnect.Controllers.RecipesController",
-    "Method": "UploadTest",
-    "RelativePath": "api/Recipes/upload-test",
     "HttpMethod": "POST",
     "IsController": true,
     "Order": 0,

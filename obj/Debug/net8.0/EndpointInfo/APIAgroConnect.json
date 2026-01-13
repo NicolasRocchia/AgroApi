@@ -36,56 +36,6 @@
         }
       }
     },
-    "/api/Recipes/upload-test": {
-      "post": {
-        "tags": [
-          "Recipes"
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "Pdf": {
-                    "type": "string",
-                    "format": "binary"
-                  },
-                  "DryRun": {
-                    "type": "boolean"
-                  }
-                }
-              },
-              "encoding": {
-                "Pdf": {
-                  "style": "form"
-                },
-                "DryRun": {
-                  "style": "form"
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/Recipes/ef-test": {
-      "get": {
-        "tags": [
-          "Recipes"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
     "/api/Recipes/import-pdf": {
       "post": {
         "tags": [

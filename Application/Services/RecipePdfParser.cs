@@ -77,11 +77,19 @@ namespace APIAgroConnect.Application.Services
                     RegexOptions.IgnoreCase)?.Trim() ?? "";
 
             var advisorName =
-                 ExtractNameBeforeAnchor(
-                     advisorBlock,
-                     @"M\.P\.\s*:\s*[0-9]{1,10}",
-                     takeLastMatch: true);
+             FindGroup(advisorBlock,
+                 @"\bNombre:\s*(.+?)(?=\s*(CUIL\s*/|M\.P\.|Domicilio:|Contacto:|Datos\s+de\s+aplicación|$))",
+                 RegexOptions.IgnoreCase)?.Trim() ?? "";
 
+            // 2) Fallback: comportamiento anterior (por si hay PDFs que no traen "Nombre:" del asesor)
+            if (string.IsNullOrWhiteSpace(advisorName))
+            {
+                advisorName =
+                    ExtractNameBeforeAnchor(
+                        advisorBlock,
+                        @"M\.P\.\s*:\s*[0-9]{1,10}",
+                        takeLastMatch: true);
+            }
             // ===== Datos de aplicación =====
             var applicationType = FindGroup(page1, @"Tipo\s+de\s+aplicación:\s*(.+?)\s*Cultivo:", RegexOptions.IgnoreCase)?.Trim();
             var crop = FindGroup(page1, @"Cultivo:\s*(.+?)\s*Diagnóstico:", RegexOptions.IgnoreCase)?.Trim();
@@ -118,7 +126,13 @@ namespace APIAgroConnect.Application.Services
                 pdfStream.Position = 0;
 
             var lotRows = _lotsExtractor.ExtractLots(pdfStream);
-            var lots = BuildLotsFromLotRows(lotRows, normalizedText);
+
+            // Pasar SOLO la sección de LOTES para heurísticas (evita falsos positivos en otras partes del PDF)
+            var lotsText = Between(page2, "Lotes", "Puntos sensibles");
+            if (string.IsNullOrWhiteSpace(lotsText))
+                lotsText = Between(normalizedText, "Lotes", "Puntos sensibles"); // fallback
+
+            var lots = BuildLotsFromLotRows(lotRows, lotsText);
 
             return new ParsedRecipe
             {
@@ -258,7 +272,8 @@ namespace APIAgroConnect.Application.Services
     string? rawDepartment,
     string normalizedText)
         {
-            static string CleanToken(string t) => Regex.Replace(t ?? "", @"[^A-ZÁÉÍÓÚÜÑ]", "", RegexOptions.IgnoreCase);
+            static string CleanToken(string t) =>
+                Regex.Replace(t ?? "", @"[^A-ZÁÉÍÓÚÜÑ]", "", RegexOptions.IgnoreCase);
 
             var loc = (rawLocality ?? "").Trim();
             var dept = (rawDepartment ?? "").Trim();
@@ -271,27 +286,48 @@ namespace APIAgroConnect.Application.Services
                 return ("", TitleCaseSafe(dept));
 
             // Normalizar tokens y también tokens "limpios" (sin signos)
-            var tokens = loc.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToArray();
+            var tokens = loc.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(t => t.Trim())
+                            .ToArray();
+
             var clean = tokens.Select(t => CleanToken(t).ToUpperInvariant()).ToArray();
 
             // Caso típico corrido:
-            // "Marcos Aldao Juarez" (todo vino en Localidad) => Dept: "Marcos Juarez", Loc: "Camilo Aldao"
+            // "Marcos Aldao Juarez" (todo vino en Localidad) => Dept: "Marcos Juarez", Loc: "<algo> Aldao"
             if (string.IsNullOrWhiteSpace(dept) &&
                 clean.Length == 3 &&
                 clean[2] == "JUAREZ")
             {
-                var deptGuess = $"{tokens[0]} {tokens[2]}"; // Marcos Juarez
+                var deptGuess = $"{tokens[0]} {tokens[2]}"; // ej: Marcos Juarez
+                var midRaw = tokens[1];                     // ej: Aldao
+                var midClean = clean[1];                    // ej: ALDAO
 
-                // Heurística 1: si el medio es ALDAO, casi siempre la localidad real es "CAMILO ALDAO"
-                var midClean = clean[1];
-                var locGuess = tokens[1];
+                // Fallback por si no encontramos una mejor
+                var locGuess = midRaw;
 
-                if (midClean == "ALDAO")
-                    locGuess = "CAMILO ALDAO";
+                // Buscar en el texto algo tipo:
+                //   "<PALABRA> ALDAO" o "<DOS PALABRAS> ALDAO"
+                // Elegimos el último match (suele estar más cerca de la tabla/mapa de lotes)
+                var rx = new Regex(
+                    $@"\b(?<loc>(?:[A-ZÁÉÍÓÚÜÑ]{{2,}}(?:\s+[A-ZÁÉÍÓÚÜÑ]{{2,}}){{0,1}})\s+{Regex.Escape(midClean)})\b",
+                    RegexOptions.IgnoreCase);
 
-                // Heurística 2: si aparece en el texto completo, usarlo
-                if (Regex.IsMatch(normalizedText, @"\bCAMILO\s+ALDAO\b", RegexOptions.IgnoreCase))
-                    locGuess = "CAMILO ALDAO";
+                var matches = rx.Matches(normalizedText);
+                if (matches.Count > 0)
+                {
+                    var candidate = matches[^1].Groups["loc"].Value;
+
+                    // Guardas básicas anti-basura
+                    var candNorm = Regex.Replace(candidate.ToUpperInvariant(), @"\s+", " ").Trim();
+                    var deptNorm = Regex.Replace(deptGuess.ToUpperInvariant(), @"\s+", " ").Trim();
+
+                    if (!candNorm.Contains("DEPARTAMENTO") &&
+                        !candNorm.Contains("LOCALIDAD") &&
+                        candNorm != deptNorm)
+                    {
+                        locGuess = candidate;
+                    }
+                }
 
                 return (TitleCaseSafe(locGuess), TitleCaseSafe(deptGuess));
             }
@@ -408,8 +444,21 @@ namespace APIAgroConnect.Application.Services
         private static string CleanupName(string s)
         {
             if (string.IsNullOrWhiteSpace(s)) return "";
+
             s = s.Replace("Nombre / Razón social::", "")
                  .Replace("Nombre / Razón social:", "");
+
+            // ✅ NUEVO: si viene pegado el "Nombre:" del asesor (columna derecha), cortar
+            // Ej: "AGROPECUARIA EL SILENCIO S.A.Nombre: BALBI GUSTAVO RAFAEL" => "AGROPECUARIA EL SILENCIO S.A."
+            var idx = s.IndexOf(" Nombre:", StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
+                s = s.Substring(0, idx);
+
+            // Por si quedó "S.A.Nombre:" sin espacio (caso común por extracción)
+            idx = s.IndexOf("Nombre:", StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
+                s = s.Substring(0, idx);
+
             s = Regex.Replace(s, @"\s+", " ").Trim();
             return s;
         }
