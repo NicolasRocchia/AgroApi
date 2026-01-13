@@ -34,7 +34,7 @@ namespace APIAgroConnect.Application.Services
                 return null;
             }
 
-            user.LastLoginAt = DateTime.Now;
+            user.LastLoginAt = DateTime.UtcNow;
             await _userRepository.SaveChangesAsync();
 
             var roles = user.UserRoles.Select(r => r.Role.Name).ToList();
