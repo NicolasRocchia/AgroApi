@@ -185,7 +185,13 @@ namespace APIAgroConnect.Infrastructure.Data
              * ========================================================== */
             modelBuilder.Entity<Recipe>(b =>
             {
-                b.ToTable("Recipes");
+                // ✅ FIX TRIGGERS: EF Core necesita saberlos para no usar OUTPUT en DML
+                b.ToTable("Recipes", tb =>
+                {
+                    tb.HasTrigger("TR_Recipes_StatusHistory");
+                    tb.HasTrigger("TR_Recipes_StatusHistory_Insert");
+                });
+
                 b.HasKey(x => x.Id);
 
                 b.Property(x => x.Status).HasMaxLength(30).IsRequired();
@@ -196,7 +202,6 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.Treatment).HasMaxLength(150);
                 b.Property(x => x.MachineToUse).HasMaxLength(100);
 
-                // ✅ Fix: había un espacio en tu código (x => x. MachinePlate). Lo corrijo:
                 b.Property(x => x.MachinePlate).HasMaxLength(50);
                 b.Property(x => x.MachineLegalName).HasMaxLength(200);
                 b.Property(x => x.MachineType).HasMaxLength(100);
@@ -315,7 +320,7 @@ namespace APIAgroConnect.Infrastructure.Data
             });
 
             /* ==========================================================
-             * RECIPE LOT VERTICES  🔴 FIX CLAVE
+             * RECIPE LOT VERTICES
              * ========================================================== */
             modelBuilder.Entity<RecipeLotVertex>(b =>
             {
@@ -338,7 +343,7 @@ namespace APIAgroConnect.Infrastructure.Data
             });
 
             /* ==========================================================
-             * RECIPE SENSITIVE POINTS  🔴 FIX CLAVE
+             * RECIPE SENSITIVE POINTS
              * ========================================================== */
             modelBuilder.Entity<RecipeSensitivePoint>(b =>
             {
