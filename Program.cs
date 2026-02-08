@@ -1,4 +1,4 @@
-using APIAgroConnect.Application.Interfaces;
+ï»¿using APIAgroConnect.Application.Interfaces;
 using APIAgroConnect.Application.Services;
 using APIAgroConnect.Common.Security;
 using APIAgroConnect.Infrastructure.Data;
@@ -26,7 +26,7 @@ builder.Services.AddSwaggerGen(c =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Pegá: Bearer {token}"
+        Description = "Pegï¿½: Bearer {token}"
     });
 
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -66,6 +66,7 @@ builder.Services.AddScoped<IPdfTextExtractor, PdfPigTextExtractor>();
 builder.Services.AddScoped<IRecipePdfParser, RecipePdfParser>();
 builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
 builder.Services.AddScoped<PdfLotsExtractor>();
+builder.Services.AddScoped<IRecipeService, RecipeService>();
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()!;
 

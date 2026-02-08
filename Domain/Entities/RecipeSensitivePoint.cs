@@ -10,7 +10,7 @@
         public string? Locality { get; set; }
         public string? Department { get; set; }
 
-        public decimal? Latitude { get; set; }
-        public decimal? Longitude { get; set; }
+        public decimal Latitude { get; set; }
+        public decimal Longitude { get; set; }
     }
 }
