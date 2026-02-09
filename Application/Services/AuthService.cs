@@ -2,18 +2,25 @@
 using APIAgroConnect.Common.Security;
 using APIAgroConnect.Contracts.Requests;
 using APIAgroConnect.Contracts.Responses;
+using APIAgroConnect.Domain.Entities;
+using APIAgroConnect.Infrastructure.Data;
 using APIAgroConnect.Infrastructure.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 namespace APIAgroConnect.Application.Services
 {
     public class AuthService : IAuthService
     {
         private readonly UserRepository _userRepository;
+        private readonly AgroDbContext _db;
         private readonly JwtTokenService _jwt;
 
-        public AuthService(UserRepository userRepository, JwtTokenService jwt)
+        private const long RoleAplicadorId = 3; // Aplicador = rol por defecto en registro público
+
+        public AuthService(UserRepository userRepository, AgroDbContext db, JwtTokenService jwt)
         {
             _userRepository = userRepository;
+            _db = db;
             _jwt = jwt;
         }
 
@@ -48,6 +55,66 @@ namespace APIAgroConnect.Application.Services
                 Roles = roles,
                 Token = token,
                 ExpiresAt = expiresAt
+            };
+        }
+
+        public async Task<RegisterResponse> RegisterAsync(RegisterRequest request)
+        {
+            var emailNormalized = NormalizeEmail(request.Email);
+            var taxId = request.TaxId.Trim();
+
+            // Validar email único
+            var emailExists = await _db.Users
+                .AnyAsync(u => u.EmailNormalized == emailNormalized);
+
+            if (emailExists)
+                throw new InvalidOperationException("Ya existe una cuenta con ese email.");
+
+            // Validar CUIT/CUIL único
+            var taxIdExists = await _db.Users
+                .AnyAsync(u => u.TaxId == taxId);
+
+            if (taxIdExists)
+                throw new InvalidOperationException("Ya existe una cuenta con ese CUIT/CUIL.");
+
+            // Verificar que el rol Aplicador existe
+            var roleExists = await _db.Roles.AnyAsync(r => r.Id == RoleAplicadorId);
+            if (!roleExists)
+                throw new InvalidOperationException("Error de configuración: rol Aplicador no encontrado.");
+
+            var now = DateTime.UtcNow;
+
+            var user = new User
+            {
+                UserName = request.UserName.Trim(),
+                EmailNormalized = emailNormalized,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                TaxId = taxId,
+                PhoneNumber = request.PhoneNumber?.Trim(),
+                IsBlocked = false,
+                CreatedAt = now
+            };
+
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync();
+
+            // Asignar rol Aplicador
+            _db.UserRoles.Add(new UserRoles
+            {
+                UserId = user.Id,
+                RoleId = RoleAplicadorId,
+                CreatedAt = now
+            });
+
+            await _db.SaveChangesAsync();
+
+            return new RegisterResponse
+            {
+                UserId = user.Id,
+                UserName = user.UserName,
+                Email = user.EmailNormalized,
+                Role = "Aplicador",
+                Message = "Cuenta creada exitosamente."
             };
         }
 

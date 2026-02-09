@@ -40,10 +40,17 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.EmailNormalized).HasMaxLength(256).IsRequired();
                 b.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
 
+                b.Property(x => x.PhoneNumber).HasMaxLength(30);
+                b.Property(x => x.TaxId).HasMaxLength(20);
+
                 b.Property(x => x.IsBlocked).HasDefaultValue(false).IsRequired();
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
 
                 b.HasQueryFilter(x => x.DeletedAt == null);
+
+                b.HasIndex(x => x.TaxId)
+                    .IsUnique()
+                    .HasFilter("[TaxId] IS NOT NULL AND [DeletedAt] IS NULL");
 
                 b.HasOne<User>().WithMany()
                     .HasForeignKey(x => x.CreatedByUserId)
