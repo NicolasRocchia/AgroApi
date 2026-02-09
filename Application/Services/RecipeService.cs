@@ -116,6 +116,9 @@ namespace APIAgroConnect.Application.Services
             if (!string.IsNullOrWhiteSpace(request.ApplicationType))
                 query = query.Where(r => r.ApplicationType == request.ApplicationType);
 
+            if (request.CreatedByUserId.HasValue)
+                query = query.Where(r => r.CreatedByUserId == request.CreatedByUserId.Value);
+
             return query;
         }
 

@@ -5,28 +5,31 @@ namespace APIAgroConnect.Contracts.Requests
         // Paginación
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 20;
-        
+
         // Filtros
         public string? Status { get; set; }
         public long? RfdNumber { get; set; }
         public string? SearchText { get; set; }
-        
+
         public DateTime? IssueDateFrom { get; set; }
         public DateTime? IssueDateTo { get; set; }
-        
+
         public DateTime? ExpirationDateFrom { get; set; }
         public DateTime? ExpirationDateTo { get; set; }
-        
+
         public long? RequesterId { get; set; }
         public long? AdvisorId { get; set; }
-        
+
         public string? Crop { get; set; }
         public string? ApplicationType { get; set; }
-        
+
+        // Filtro por usuario creador (se setea desde el controller, no desde querystring)
+        public long? CreatedByUserId { get; set; }
+
         // Ordenamiento
         public string SortBy { get; set; } = "CreatedAt";
         public bool SortDescending { get; set; } = true;
-        
+
         // Validación
         public void Validate()
         {

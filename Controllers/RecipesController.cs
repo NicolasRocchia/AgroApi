@@ -31,6 +31,13 @@ namespace APIAgroConnect.Controllers
         {
             try
             {
+                // Si el usuario es Aplicador, solo ve sus propias recetas
+                if (User.IsInRole("Aplicador"))
+                {
+                    var userId = GetUserIdOrThrow();
+                    request.CreatedByUserId = userId;
+                }
+
                 var result = await _recipeService.GetRecipesAsync(request);
                 return Ok(result);
             }
@@ -53,6 +60,14 @@ namespace APIAgroConnect.Controllers
 
                 if (recipe == null)
                     return NotFound(new { message = $"No se encontró la receta con ID {id}" });
+
+                // Aplicador solo puede ver sus propias recetas
+                if (User.IsInRole("Aplicador"))
+                {
+                    var userId = GetUserIdOrThrow();
+                    if (recipe.CreatedByUserId != userId)
+                        return Forbid();
+                }
 
                 return Ok(recipe);
             }
