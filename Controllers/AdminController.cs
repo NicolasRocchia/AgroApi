@@ -1,4 +1,5 @@
 using APIAgroConnect.Application.Interfaces;
+using APIAgroConnect.Application.Services;
 using APIAgroConnect.Contracts.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,10 +13,29 @@ namespace APIAgroConnect.Controllers
     public class AdminController : ControllerBase
     {
         private readonly IAdminUserService _userService;
+        private readonly IInsightsService _insightsService;
 
-        public AdminController(IAdminUserService userService)
+        public AdminController(IAdminUserService userService, IInsightsService insightsService)
         {
             _userService = userService;
+            _insightsService = insightsService;
+        }
+
+        /// <summary>
+        /// Estadísticas y métricas del sistema
+        /// </summary>
+        [HttpGet("insights")]
+        public async Task<IActionResult> GetInsights()
+        {
+            try
+            {
+                var insights = await _insightsService.GetInsightsAsync();
+                return Ok(insights);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Error al obtener estadísticas.", detail = ex.Message });
+            }
         }
 
         /// <summary>
