@@ -76,10 +76,33 @@ namespace APIAgroConnect.Application.Services
                     @"M\.P\.\s*:\s*([0-9]{1,10})",
                     RegexOptions.IgnoreCase)?.Trim() ?? "";
 
-            var advisorName =
-             FindGroup(advisorBlock,
-                 @"\bNombre:\s*(.+?)(?=\s*(CUIL\s*/|M\.P\.|Domicilio:|Contacto:|Datos\s+de\s+aplicación|$))",
-                 RegexOptions.IgnoreCase)?.Trim() ?? "";
+            var advisorName = "";
+            {
+                // Strategy: find ALL "Nombre:" occurrences in advisor block.
+                // Pick the one that is NOT part of "Nombre / Razón social:" pattern.
+                var advisorNameMatches = Regex.Matches(advisorBlock,
+                    @"Nombre:\s*(.+?)(?=\s*(CUIL\s*/|M\.P\.|Domicilio:|Contacto:|Datos\s+de\s+aplicación|Nombre\s*/\s*Razón|$))",
+                    RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+                foreach (Match am in advisorNameMatches)
+                {
+                    // Check if this "Nombre:" is part of "Nombre / Razón social:"
+                    var startIdx = am.Index;
+                    var prefix = startIdx + 7 < advisorBlock.Length
+                        ? advisorBlock.Substring(am.Index, Math.Min(30, advisorBlock.Length - am.Index))
+                        : "";
+                    if (prefix.Contains("/") && prefix.Contains("Razón"))
+                        continue; // skip "Nombre / Razón social:"
+
+                    var candidate = am.Groups[1].Value.Trim();
+                    if (!string.IsNullOrWhiteSpace(candidate) &&
+                        !string.Equals(candidate, requesterName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        advisorName = candidate;
+                        break;
+                    }
+                }
+            }
 
             // 2) Fallback: comportamiento anterior (por si hay PDFs que no traen "Nombre:" del asesor)
             if (string.IsNullOrWhiteSpace(advisorName))
@@ -352,28 +375,50 @@ namespace APIAgroConnect.Application.Services
         {
             var s = Regex.Replace(block ?? "", @"\s+", " ").Trim();
 
+            // ── 1) Remove table headers (PdfPig glues them together) ──
             s = s.Replace("Tipo deproducto", " ")
                  .Replace("Nombre", " ")
                  .Replace("Nro registroSENASA", " ")
-                 .Replace("Clasetoxicológica", " ")
                  .Replace("Dosis", " ")
                  .Replace("UM/UM", " ")
                  .Replace("Total producto aaplicar", " ");
+            s = Regex.Replace(s, @"Clase\s*toxicol[oó]gica", " ", RegexOptions.IgnoreCase);
 
-            s = Regex.Replace(s, @"(?<=[A-ZÁÉÍÓÚÜÑ])(?=\d)", " ");
-            s = Regex.Replace(s, @"(?<=\d)(?=[A-ZÁÉÍÓÚÜÑ])", " ");
+            // ── 2) Handle PRINCIPIO ACTIVO (may arrive glued: PRINCIPIOACTIVO) ──
+            s = Regex.Replace(s, @"PRINCIPIO\s*ACTIVO", "PRINCIPIO_ACTIVO", RegexOptions.IgnoreCase);
 
-            s = Regex.Replace(s, @"\b(FORMULADO|CALDO|SÓLIDO|SOLIDO|LIQUIDO|LÍQUIDO|CEBO|GRANULADO)(?=[A-ZÁÉÍÓÚÜÑ])", "$1 ");
-            s = Regex.Replace(s, @"((?:I|II|III|IV)\s*-\s*[A-ZÁÉÍÓÚÜÑ ]+)(?=\d)", "$1 ");
+            // ── 3) Protect compound units (CM3, CM2) from letter/digit split ──
+            s = Regex.Replace(s, @"CM(\d)", "CM§$1", RegexOptions.IgnoreCase);
+
+            // ── 4) Insert space BEFORE and AFTER each product-type keyword ──
+            //       Handles "LFORMULADOHEAT" → "L FORMULADO HEAT"
+            s = Regex.Replace(s,
+                @"(FORMULADO|PRINCIPIO_ACTIVO|PRINCIPIO|CALDO|SÓLIDO|SOLIDO|LIQUIDO|LÍQUIDO|CEBO|GRANULADO)",
+                " $1 ", RegexOptions.IgnoreCase);
+
+            // ── 5) Split glued letters↔digits in both directions ──
+            //       "AURUM34365" → "AURUM 34365", "CUIDADO2" → "CUIDADO 2"
+            s = Regex.Replace(s, @"([A-ZÁÉÍÓÚÜÑa-záéíóúüñ])(\d)", "$1 $2");
+            //       "2L/HA" → "2 L/HA", "35G/HA" → "35 G/HA"
+            s = Regex.Replace(s, @"(\d)([A-ZÁÉÍÓÚÜÑ])", "$1 $2");
+
+            // ── 6) Separate senasa "-" glued to digit: "25-III" → "25 - III" ──
+            s = Regex.Replace(s, @"(\d)-(I{1,3}V?\s*-)", "$1 - $2");
+
+            // ── 7) Restore protected compound units ──
+            s = s.Replace("§", "");
+
+            // ── 8) Collapse whitespace ──
             s = Regex.Replace(s, @"\s+", " ").Trim();
 
+            // ── 9) Main product regex ──
             var rx = new Regex(
-                @"(?<type>FORMULADO|CALDO|SÓLIDO|SOLIDO|LIQUIDO|LÍQUIDO|CEBO|GRANULADO)\s+" +
+                @"(?<type>FORMULADO|PRINCIPIO_ACTIVO|PRINCIPIO|CALDO|SÓLIDO|SOLIDO|LIQUIDO|LÍQUIDO|CEBO|GRANULADO)\s+" +
                 @"(?<name>.+?)\s+" +
-                @"(?<senasa>\d{4,6})\s+" +
-                @"(?<tox>(?:I|II|III|IV)\s*-\s*[A-ZÁÉÍÓÚÜÑ ]+)\s+" +
-                @"(?<dose>\d+(?:[.,]\d+)?)\s*(?<doseUnit>[A-Z/]+)\s+" +
-                @"(?<total>\d+(?:[.,]\d+)?)\s*(?<totalUnit>[A-Z]+)",
+                @"(?<senasa>\d{4,6}|-)\s+" +
+                @"(?<tox>(?:I{1,3}V?)\s*-\s*[A-ZÁÉÍÓÚÜÑ ]+?)\s+" +
+                @"(?<dose>\d+(?:[.,]\d+)?)\s*(?<doseUnit>[A-Z0-9/]+)\s+" +
+                @"(?<total>\d+(?:[.,]\d+)?)\s*(?<totalUnit>[A-Z][A-Z0-9/]*)",
                 RegexOptions.IgnoreCase);
 
             var list = new List<ParsedProduct>();
@@ -385,9 +430,14 @@ namespace APIAgroConnect.Application.Services
 
                 list.Add(new ParsedProduct
                 {
-                    ProductType = m.Groups["type"].Value.Trim(),
+                    ProductType = Regex.Replace(
+                        m.Groups["type"].Value.Trim(),
+                        @"^PRINCIPIO(_ACTIVO)?$", "PRINCIPIO ACTIVO",
+                        RegexOptions.IgnoreCase),
                     ProductName = name,
-                    SenasaRegistry = m.Groups["senasa"].Value.Trim(),
+                    SenasaRegistry = m.Groups["senasa"].Value.Trim() == "-"
+                        ? null
+                        : m.Groups["senasa"].Value.Trim(),
                     ToxicologicalClass = m.Groups["tox"].Value.Trim(),
                     DoseValue = ParseDecimalNullable(m.Groups["dose"].Value),
                     DoseUnit = m.Groups["doseUnit"].Value.Trim(),
