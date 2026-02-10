@@ -67,6 +67,7 @@ builder.Services.AddScoped<IRecipePdfParser, RecipePdfParser>();
 builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
 builder.Services.AddScoped<PdfLotsExtractor>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
+builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()!;
 
