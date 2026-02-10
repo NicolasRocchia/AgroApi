@@ -395,8 +395,21 @@ namespace APIAgroConnect.Application.Services
                 recipe.Lots.Add(lot);
             }
 
-            // Si más adelante parseás puntos sensibles, se agregan acá.
-            // foreach (var sp in parsed.SensitivePoints) ...
+            // Puntos sensibles
+            foreach (var sp in parsed.SensitivePoints)
+            {
+                recipe.SensitivePoints.Add(new RecipeSensitivePoint
+                {
+                    Name = sp.Name,
+                    Type = sp.Type,
+                    Locality = sp.Locality,
+                    Department = sp.Department,
+                    Latitude = sp.Latitude,
+                    Longitude = sp.Longitude,
+                    CreatedAt = now,
+                    CreatedByUserId = actorUserId
+                });
+            }
         }
     }
 }

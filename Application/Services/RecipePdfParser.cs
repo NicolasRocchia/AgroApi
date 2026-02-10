@@ -157,6 +157,45 @@ namespace APIAgroConnect.Application.Services
 
             var lots = BuildLotsFromLotRows(lotRows, lotsText);
 
+            // ===== SENSITIVE POINTS (PdfLotsExtractor) =====
+            if (pdfStream.CanSeek)
+                pdfStream.Position = 0;
+
+            var spRows = _lotsExtractor.ExtractSensitivePoints(pdfStream);
+
+            var sensitivePoints = new List<ParsedSensitivePoint>();
+            string? currentSPName = null;
+            string? currentSPType = null;
+            string? currentSPLocality = null;
+            string? currentSPDepartment = null;
+
+            foreach (var sp in spRows)
+            {
+                // Track current name/type (rows with coords but no name inherit from previous)
+                if (!string.IsNullOrWhiteSpace(sp.Nombre))
+                    currentSPName = sp.Nombre;
+                if (!string.IsNullOrWhiteSpace(sp.Tipo))
+                    currentSPType = sp.Tipo;
+                if (!string.IsNullOrWhiteSpace(sp.Localidad))
+                    currentSPLocality = sp.Localidad;
+                if (!string.IsNullOrWhiteSpace(sp.Departamento))
+                    currentSPDepartment = sp.Departamento;
+
+                if (sp.Latitud is not null && sp.Longitud is not null)
+                {
+                    sensitivePoints.Add(new ParsedSensitivePoint
+                    {
+                        Name = TitleCaseSafe(currentSPName ?? ""),
+                        Type = TitleCaseSafe(currentSPType),
+                        Locality = TitleCaseSafe(currentSPLocality),
+                        Department = TitleCaseSafe(currentSPDepartment),
+                        Latitude = sp.Latitud.Value,
+                        Longitude = sp.Longitud.Value
+                    });
+                }
+            }
+
+
             return new ParsedRecipe
             {
                 RfdNumber = rfdNumber,
@@ -192,7 +231,8 @@ namespace APIAgroConnect.Application.Services
                 Notes = notes,
 
                 Products = products,
-                Lots = lots
+                Lots = lots,
+                SensitivePoints = sensitivePoints
             };
         }
 

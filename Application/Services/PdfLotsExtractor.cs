@@ -207,7 +207,220 @@ namespace APIAgroConnect.Application.Services
             return new List<LotRow>();
         }
 
-        private static List<LotRow> MergeContinuationLines(List<LotRow> rows)
+
+        // ================================================================
+        // SENSITIVE POINTS extraction
+        // ================================================================
+
+        public sealed record SensitivePointRow(
+            string? Nombre,
+            string? Tipo,
+            string? Localidad,
+            string? Departamento,
+            decimal? Latitud,
+            decimal? Longitud
+        );
+
+        public List<SensitivePointRow> ExtractSensitivePoints(Stream pdfStream)
+        {
+            using var doc = PdfDocument.Open(pdfStream);
+            var allResults = new List<SensitivePointRow>();
+
+            double xNombre = -1, xTipo = -1, xLoc = -1, xDept = -1,
+                   xOrden = -1, xLat = -1, xLon = -1;
+            bool headerFound = false;
+
+            foreach (var page in doc.GetPages())
+            {
+                var words = page.GetWords().ToList();
+                if (words.Count == 0) continue;
+
+                // Look for a header row containing TIPO (distinguishes SP table from Lots table)
+                var spHeaderCandidates = words
+                    .Where(w => Normalize(w.Text) is "NOMBRE" or "TIPO" or "LOCALIDAD"
+                        or "DEPARTAMENTO" or "ORDEN" or "LATITUD" or "LONGITUD")
+                    .ToList();
+
+                var tipoWords = spHeaderCandidates.Where(w => Normalize(w.Text) == "TIPO").ToList();
+
+                if (tipoWords.Count > 0)
+                {
+                    // Find the header band that includes TIPO
+                    foreach (var tipoWord in tipoWords)
+                    {
+                        var tipoY = BandY(tipoWord.BoundingBox.Bottom);
+                        var headerBand = spHeaderCandidates
+                            .Where(w => Math.Abs(BandY(w.BoundingBox.Bottom) - tipoY) <= 1)
+                            .OrderBy(w => w.BoundingBox.Left)
+                            .ToList();
+
+                        if (headerBand.Count < 5) continue;
+
+                        xNombre = FindX(headerBand, "NOMBRE");
+                        xTipo   = FindX(headerBand, "TIPO");
+                        xLoc    = FindX(headerBand, "LOCALIDAD");
+                        xDept   = FindX(headerBand, "DEPARTAMENTO");
+                        xOrden  = FindX(headerBand, "ORDEN");
+                        xLat    = FindX(headerBand, "LATITUD");
+                        xLon    = FindX(headerBand, "LONGITUD");
+
+                        if (xNombre < 0 || xTipo < 0 || xLat < 0 || xLon < 0) continue;
+
+                        headerFound = true;
+
+                        var dataWords = words
+                            .Where(w => BandY(w.BoundingBox.Bottom) < tipoY - 2)
+                            .ToList();
+
+                        var rows = GroupByVisualRows(dataWords, tol: 4.0);
+                        ExtractSPRows(rows, allResults,
+                            k => SPStart(k, xNombre, xTipo, xLoc, xDept, xOrden, xLat, xLon),
+                            k => SPEnd(k, xNombre, xTipo, xLoc, xDept, xOrden, xLat, xLon));
+                        break;
+                    }
+                }
+                else if (headerFound)
+                {
+                    // Continuation page: reuse column positions, skip repeated header
+                    var repeatedHeader = spHeaderCandidates
+                        .GroupBy(w => BandY(w.BoundingBox.Bottom))
+                        .Where(g => g.Count() >= 3)
+                        .OrderByDescending(g => g.Key)
+                        .FirstOrDefault();
+
+                    double cutoffY = repeatedHeader?.Key ?? double.MaxValue;
+
+                    var dataWords = words
+                        .Where(w => BandY(w.BoundingBox.Bottom) < cutoffY - 2)
+                        .ToList();
+
+                    if (dataWords.Count == 0) continue;
+
+                    var rows = GroupByVisualRows(dataWords, tol: 4.0);
+                    ExtractSPRows(rows, allResults,
+                        k => SPStart(k, xNombre, xTipo, xLoc, xDept, xOrden, xLat, xLon),
+                        k => SPEnd(k, xNombre, xTipo, xLoc, xDept, xOrden, xLat, xLon));
+                }
+            }
+
+            return MergeSPContinuationLines(allResults);
+        }
+
+        // Column range helpers for SP table
+        private static double SPStart(string k, double xNombre, double xTipo, double xLoc,
+            double xDept, double xOrden, double xLat, double xLon)
+        {
+            var cols = new[] {
+                ("NOMBRE", xNombre), ("TIPO", xTipo), ("LOCALIDAD", xLoc),
+                ("DEPARTAMENTO", xDept), ("ORDEN", xOrden), ("LATITUD", xLat), ("LONGITUD", xLon)
+            }.Where(c => c.Item2 >= 0).OrderBy(c => c.Item2).ToList();
+
+            var idx = cols.FindIndex(c => c.Item1 == k);
+            return idx <= 0 ? double.NegativeInfinity : (cols[idx - 1].Item2 + cols[idx].Item2) / 2.0;
+        }
+
+        private static double SPEnd(string k, double xNombre, double xTipo, double xLoc,
+            double xDept, double xOrden, double xLat, double xLon)
+        {
+            var cols = new[] {
+                ("NOMBRE", xNombre), ("TIPO", xTipo), ("LOCALIDAD", xLoc),
+                ("DEPARTAMENTO", xDept), ("ORDEN", xOrden), ("LATITUD", xLat), ("LONGITUD", xLon)
+            }.Where(c => c.Item2 >= 0).OrderBy(c => c.Item2).ToList();
+
+            var idx = cols.FindIndex(c => c.Item1 == k);
+            if (idx < 0 || idx >= cols.Count - 1) return double.PositiveInfinity;
+            return (cols[idx].Item2 + cols[idx + 1].Item2) / 2.0;
+        }
+
+        private void ExtractSPRows(
+            IEnumerable<List<Word>> rows,
+            List<SensitivePointRow> results,
+            Func<string, double> Start,
+            Func<string, double> End)
+        {
+            foreach (var row in rows)
+            {
+                var rowText = string.Join(" ", row.Select(w => w.Text)).ToUpperInvariant();
+
+                if (rowText.Contains("PGINA") || rowText.Contains("PAGINA"))
+                    continue;
+
+                string colNombre = JoinInRange(row, Start("NOMBRE"), End("NOMBRE"));
+                string colTipo   = JoinInRange(row, Start("TIPO"), End("TIPO"));
+                string colLoc    = JoinInRange(row, Start("LOCALIDAD"), End("LOCALIDAD"));
+                string colDept   = JoinInRange(row, Start("DEPARTAMENTO"), End("DEPARTAMENTO"));
+                string colLat    = JoinInRange(row, Start("LATITUD"), End("LATITUD"));
+                string colLon    = JoinInRange(row, Start("LONGITUD"), End("LONGITUD"));
+
+                var nNom = Normalize(colNombre);
+                var nTip = Normalize(colTipo);
+
+                // Skip header fragments
+                if (nNom is "NOMBRE" or "PUNTOSSENSIBLES" or "REFERENCIAS" or "LOTE"
+                    || nTip is "TIPO"
+                    || Normalize(colLoc) is "LOCALIDAD"
+                    || Normalize(colDept) is "DEPARTAMENTO"
+                    || Normalize(colLat) is "LATITUD"
+                    || Normalize(colLon) is "LONGITUD")
+                    continue;
+
+                // Skip legend rows
+                if (rowText.Contains("RADIO") && rowText.Contains("MTS"))
+                    continue;
+
+                var lat = ParseDecimalNullable(colLat);
+                var lon = ParseDecimalNullable(colLon);
+
+                if (string.IsNullOrWhiteSpace(colNombre)
+                    && string.IsNullOrWhiteSpace(colTipo)
+                    && string.IsNullOrWhiteSpace(colLoc)
+                    && string.IsNullOrWhiteSpace(colDept)
+                    && lat is null && lon is null)
+                    continue;
+
+                results.Add(new SensitivePointRow(
+                    Nombre: NullIfEmpty(colNombre),
+                    Tipo: NullIfEmpty(colTipo),
+                    Localidad: NullIfEmpty(colLoc),
+                    Departamento: NullIfEmpty(colDept),
+                    Latitud: lat,
+                    Longitud: lon
+                ));
+            }
+        }
+
+        private static List<SensitivePointRow> MergeSPContinuationLines(List<SensitivePointRow> rows)
+        {
+            for (int i = 0; i < rows.Count - 1; i++)
+            {
+                var a = rows[i];
+                var b = rows[i + 1];
+
+                bool bHasNoCoords = b.Latitud is null && b.Longitud is null;
+                bool bHasText = !string.IsNullOrWhiteSpace(b.Nombre)
+                    || !string.IsNullOrWhiteSpace(b.Tipo)
+                    || !string.IsNullOrWhiteSpace(b.Localidad)
+                    || !string.IsNullOrWhiteSpace(b.Departamento);
+
+                if (!bHasNoCoords || !bHasText) continue;
+
+                rows[i] = a with
+                {
+                    Nombre = NullIfEmpty(AppendDedup(a.Nombre, b.Nombre)),
+                    Tipo = NullIfEmpty(AppendDedup(a.Tipo, b.Tipo)),
+                    Localidad = NullIfEmpty(AppendDedup(a.Localidad, b.Localidad)),
+                    Departamento = NullIfEmpty(AppendDedup(a.Departamento, b.Departamento))
+                };
+
+                rows.RemoveAt(i + 1);
+                i--;
+            }
+
+            return rows;
+        }
+
+
+                private static List<LotRow> MergeContinuationLines(List<LotRow> rows)
         {
             // Ejemplo:
             // Row0: Nombre="LOTE PRUEBA", Loc="CAMILO", Dept="MARCOS", Sup=2.30, Orden=1, Lat/Lon=...
