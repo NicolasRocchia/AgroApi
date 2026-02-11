@@ -26,6 +26,9 @@ namespace APIAgroConnect.Contracts.Requests
         // Filtro por usuario creador (se setea desde el controller, no desde querystring)
         public long? CreatedByUserId { get; set; }
 
+        // Filtro por municipio asignado (se setea desde el controller, no desde querystring)
+        public long? MunicipalityId { get; set; }
+
         // Ordenamiento
         public string SortBy { get; set; } = "CreatedAt";
         public bool SortDescending { get; set; } = true;

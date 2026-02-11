@@ -24,6 +24,7 @@ namespace APIAgroConnect.Application.Services
                 .Include(r => r.Advisor)
                 .Include(r => r.Products)
                 .Include(r => r.Lots)
+                .Include(r => r.AssignedMunicipality)
                 .AsQueryable();
 
             // Aplicar filtros
@@ -55,7 +56,8 @@ namespace APIAgroConnect.Application.Services
                     ProductsCount = r.Products.Count,
                     LotsCount = r.Lots.Count,
                     CreatedAt = r.CreatedAt,
-                    UpdatedAt = r.UpdatedAt
+                    UpdatedAt = r.UpdatedAt,
+                    AssignedMunicipalityName = r.AssignedMunicipality != null ? r.AssignedMunicipality.Name : null
                 })
                 .ToListAsync();
 
@@ -119,6 +121,9 @@ namespace APIAgroConnect.Application.Services
             if (request.CreatedByUserId.HasValue)
                 query = query.Where(r => r.CreatedByUserId == request.CreatedByUserId.Value);
 
+            if (request.MunicipalityId.HasValue)
+                query = query.Where(r => r.AssignedMunicipalityId == request.MunicipalityId.Value);
+
             return query;
         }
 
@@ -152,6 +157,35 @@ namespace APIAgroConnect.Application.Services
             };
         }
 
+        public async Task ChangeStatusAsync(long recipeId, string newStatus, long userId)
+        {
+            var validStatuses = new[] { "ABIERTA", "PENDIENTE", "APROBADA", "RECHAZADA", "OBSERVADA", "CERRADA", "ANULADA" };
+            newStatus = newStatus.ToUpper().Trim();
+
+            if (!validStatuses.Contains(newStatus))
+                throw new ArgumentException($"Estado inválido: {newStatus}. Los estados válidos son: {string.Join(", ", validStatuses)}");
+
+            var recipe = await _context.Recipes.FindAsync(recipeId)
+                ?? throw new InvalidOperationException($"No se encontró la receta con ID {recipeId}.");
+
+            // Validar transiciones permitidas
+            var allowedTransitions = new Dictionary<string, string[]>
+            {
+                { "ABIERTA", new[] { "CERRADA", "ANULADA", "PENDIENTE" } },
+                { "APROBADA", new[] { "CERRADA", "ANULADA" } },
+                { "RECHAZADA", new[] { "ANULADA" } },
+            };
+
+            if (!allowedTransitions.ContainsKey(recipe.Status) || !allowedTransitions[recipe.Status].Contains(newStatus))
+                throw new InvalidOperationException($"No se puede cambiar de {recipe.Status} a {newStatus}.");
+
+            recipe.Status = newStatus;
+            recipe.UpdatedAt = DateTime.UtcNow;
+            recipe.UpdatedByUserId = userId;
+
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<RecipeDetailDto?> GetRecipeByIdAsync(long id)
         {
             var recipe = await _context.Recipes
@@ -162,6 +196,15 @@ namespace APIAgroConnect.Application.Services
                 .Include(r => r.Lots)
                     .ThenInclude(l => l.Vertices.OrderBy(v => v.Order))
                 .Include(r => r.SensitivePoints)
+                .Include(r => r.AssignedMunicipality)
+                .Include(r => r.ReviewLogs)
+                    .ThenInclude(rl => rl.Municipality)
+                .Include(r => r.ReviewLogs)
+                    .ThenInclude(rl => rl.TargetMunicipality)
+                .Include(r => r.Messages)
+                    .ThenInclude(m => m.Sender)
+                        .ThenInclude(s => s.UserRoles)
+                            .ThenInclude(ur => ur.Role)
                 .FirstOrDefaultAsync(r => r.Id == id);
 
             if (recipe == null)
@@ -282,8 +325,44 @@ namespace APIAgroConnect.Application.Services
                 CreatedByUserName = createdByUserName,
                 UpdatedAt = recipe.UpdatedAt,
                 UpdatedByUserId = recipe.UpdatedByUserId,
-                UpdatedByUserName = updatedByUserName
+                UpdatedByUserName = updatedByUserName,
+
+                // Municipal
+                AssignedMunicipalityId = recipe.AssignedMunicipalityId,
+                AssignedMunicipalityName = recipe.AssignedMunicipality?.Name,
+                AssignedAt = recipe.AssignedAt,
+                ReviewLogs = recipe.ReviewLogs
+                    .OrderByDescending(rl => rl.CreatedAt)
+                    .Select(rl => new Contracts.Responses.RecipeReviewLogDto
+                    {
+                        Id = rl.Id,
+                        Action = rl.Action,
+                        MunicipalityName = rl.Municipality.Name,
+                        TargetMunicipalityName = rl.TargetMunicipality?.Name,
+                        Observation = rl.Observation,
+                        CreatedAt = rl.CreatedAt,
+                        CreatedByUserName = null // se resuelve abajo
+                    }).ToList(),
+                Messages = recipe.Messages
+                    .OrderBy(m => m.CreatedAt)
+                    .Select(m => new Contracts.Responses.RecipeMessageDto
+                    {
+                        Id = m.Id,
+                        SenderUserId = m.SenderUserId,
+                        SenderName = m.Sender.UserName,
+                        SenderRole = m.Sender.UserRoles
+                            .Select(ur => ur.Role.Name)
+                            .FirstOrDefault() ?? "Desconocido",
+                        Message = m.Message,
+                        CreatedAt = m.CreatedAt
+                    }).ToList()
             };
+        }
+
+        public async Task<Domain.Entities.Municipality?> GetMunicipalityByUserIdAsync(long userId)
+        {
+            return await _context.Municipalities
+                .FirstOrDefaultAsync(m => m.UserId == userId);
         }
     }
 }

@@ -38,8 +38,15 @@
 
         public string? Notes { get; set; }
 
+        // Asignación municipal
+        public long? AssignedMunicipalityId { get; set; }
+        public Municipality? AssignedMunicipality { get; set; }
+        public DateTime? AssignedAt { get; set; }
+
         public ICollection<RecipeProduct> Products { get; set; } = new List<RecipeProduct>();
         public ICollection<RecipeLot> Lots { get; set; } = new List<RecipeLot>();
         public ICollection<RecipeSensitivePoint> SensitivePoints { get; set; } = new List<RecipeSensitivePoint>();
+        public ICollection<RecipeReviewLog> ReviewLogs { get; set; } = new List<RecipeReviewLog>();
+        public ICollection<RecipeMessage> Messages { get; set; } = new List<RecipeMessage>();
     }
 }

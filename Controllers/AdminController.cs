@@ -2,6 +2,7 @@ using APIAgroConnect.Application.Interfaces;
 using APIAgroConnect.Contracts.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace APIAgroConnect.Controllers
@@ -79,6 +80,29 @@ namespace APIAgroConnect.Controllers
             var actorUserId = GetUserIdOrThrow();
             await _userService.ChangeRoleAsync(id, request.RoleId, actorUserId);
             return Ok(new { message = "Rol actualizado correctamente." });
+        }
+
+        /// <summary>
+        /// Devuelve usuarios con rol Municipio que no están asignados a ningún municipio
+        /// </summary>
+        [HttpGet("users/available-municipio")]
+        public async Task<IActionResult> GetAvailableMunicipioUsers(
+            [FromServices] APIAgroConnect.Infrastructure.Data.AgroDbContext context)
+        {
+            var assignedUserIds = await context.Municipalities
+                .Where(m => m.UserId != null)
+                .Select(m => m.UserId!.Value)
+                .ToListAsync();
+
+            var municipioRoleName = "Municipio";
+            var users = await context.Users
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .Where(u => u.UserRoles.Any(ur => ur.Role.Name == municipioRoleName))
+                .Where(u => !assignedUserIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.UserName, u.EmailNormalized })
+                .ToListAsync();
+
+            return Ok(users);
         }
 
         private long GetUserIdOrThrow()

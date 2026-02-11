@@ -70,6 +70,7 @@ builder.Services.AddScoped<IRecipePdfParser, RecipePdfParser>();
 builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
 builder.Services.AddScoped<PdfLotsExtractor>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
+builder.Services.AddScoped<IMunicipalityService, MunicipalityService>();
 builder.Services.AddScoped<IInsightsService, InsightsService>();
 builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 

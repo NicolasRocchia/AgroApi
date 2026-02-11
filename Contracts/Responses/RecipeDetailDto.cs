@@ -52,6 +52,13 @@ namespace APIAgroConnect.Contracts.Responses
         public DateTime? UpdatedAt { get; set; }
         public long? UpdatedByUserId { get; set; }
         public string? UpdatedByUserName { get; set; }
+
+        // Municipal
+        public long? AssignedMunicipalityId { get; set; }
+        public string? AssignedMunicipalityName { get; set; }
+        public DateTime? AssignedAt { get; set; }
+        public List<RecipeReviewLogDto> ReviewLogs { get; set; } = new();
+        public List<RecipeMessageDto> Messages { get; set; } = new();
     }
     
     public class RequesterDto

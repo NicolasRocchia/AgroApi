@@ -24,6 +24,11 @@ namespace APIAgroConnect.Infrastructure.Data
         // ✅ Catálogo global
         public DbSet<Product> Products => Set<Product>();
 
+        // Municipal
+        public DbSet<Municipality> Municipalities => Set<Municipality>();
+        public DbSet<RecipeReviewLog> RecipeReviewLogs => Set<RecipeReviewLog>();
+        public DbSet<RecipeMessage> RecipeMessages => Set<RecipeMessage>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.HasDefaultSchema("dbo");
@@ -243,6 +248,102 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.HasOne<User>().WithMany()
                     .HasForeignKey(x => x.DeletedByUserId)
                     .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasOne(x => x.AssignedMunicipality)
+                    .WithMany()
+                    .HasForeignKey(x => x.AssignedMunicipalityId)
+                    .OnDelete(DeleteBehavior.NoAction)
+                    .HasConstraintName("FK_Recipes_Municipalities");
+
+                b.HasIndex(x => x.AssignedMunicipalityId)
+                    .HasFilter("[AssignedMunicipalityId] IS NOT NULL");
+            });
+
+            /* ==========================================================
+             * MUNICIPALITIES
+             * ========================================================== */
+            modelBuilder.Entity<Municipality>(b =>
+            {
+                b.ToTable("Municipalities");
+                b.HasKey(x => x.Id);
+
+                b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+                b.Property(x => x.Province).HasMaxLength(100);
+                b.Property(x => x.Department).HasMaxLength(150);
+                b.Property(x => x.Latitude).HasPrecision(10, 7);
+                b.Property(x => x.Longitude).HasPrecision(10, 7);
+
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.HasQueryFilter(x => x.DeletedAt == null);
+
+                b.HasOne(x => x.User)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.NoAction)
+                    .HasConstraintName("FK_Municipalities_Users");
+
+                b.HasIndex(x => x.UserId)
+                    .IsUnique()
+                    .HasFilter("[DeletedAt] IS NULL AND [UserId] IS NOT NULL");
+
+                b.HasIndex(x => x.Name)
+                    .IsUnique()
+                    .HasFilter("[DeletedAt] IS NULL");
+            });
+
+            /* ==========================================================
+             * RECIPE REVIEW LOG
+             * ========================================================== */
+            modelBuilder.Entity<RecipeReviewLog>(b =>
+            {
+                b.ToTable("RecipeReviewLog");
+                b.HasKey(x => x.Id);
+
+                b.Property(x => x.Action).HasMaxLength(30).IsRequired();
+                b.Property(x => x.Observation).HasMaxLength(500);
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
+
+                b.HasOne(x => x.Recipe)
+                    .WithMany(r => r.ReviewLogs)
+                    .HasForeignKey(x => x.RecipeId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasOne(x => x.Municipality)
+                    .WithMany()
+                    .HasForeignKey(x => x.MunicipalityId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasOne(x => x.TargetMunicipality)
+                    .WithMany()
+                    .HasForeignKey(x => x.TargetMunicipalityId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasIndex(x => new { x.RecipeId, x.CreatedAt });
+                b.HasIndex(x => x.MunicipalityId);
+            });
+
+            /* ==========================================================
+             * RECIPE MESSAGES
+             * ========================================================== */
+            modelBuilder.Entity<RecipeMessage>(b =>
+            {
+                b.ToTable("RecipeMessages");
+                b.HasKey(x => x.Id);
+
+                b.Property(x => x.Message).HasMaxLength(1000).IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
+
+                b.HasOne(x => x.Recipe)
+                    .WithMany(r => r.Messages)
+                    .HasForeignKey(x => x.RecipeId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasOne(x => x.Sender)
+                    .WithMany()
+                    .HasForeignKey(x => x.SenderUserId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasIndex(x => new { x.RecipeId, x.CreatedAt });
             });
 
             /* ==========================================================

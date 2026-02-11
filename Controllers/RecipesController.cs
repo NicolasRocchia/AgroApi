@@ -32,6 +32,16 @@ namespace APIAgroConnect.Controllers
             {
                 request.CreatedByUserId = GetUserIdOrThrow();
             }
+            else if (User.IsInRole("Municipio"))
+            {
+                var userId = GetUserIdOrThrow();
+                var municipality = await _recipeService.GetMunicipalityByUserIdAsync(userId);
+                
+                if (municipality == null)
+                    return BadRequest(new { error = "Usuario no tiene municipio asignado." });
+                
+                request.MunicipalityId = municipality.Id;
+            }
 
             var result = await _recipeService.GetRecipesAsync(request);
             return Ok(result);
@@ -55,6 +65,17 @@ namespace APIAgroConnect.Controllers
                 if (recipe.CreatedByUserId != userId)
                     return Forbid();
             }
+            else if (User.IsInRole("Municipio"))
+            {
+                var userId = GetUserIdOrThrow();
+                var municipality = await _recipeService.GetMunicipalityByUserIdAsync(userId);
+                
+                if (municipality == null)
+                    return BadRequest(new { error = "Usuario no tiene municipio asignado." });
+                
+                if (recipe.AssignedMunicipalityId != municipality.Id)
+                    return Forbid();
+            }
 
             return Ok(recipe);
         }
@@ -69,6 +90,32 @@ namespace APIAgroConnect.Controllers
             var userId = GetUserIdOrThrow();
             var result = await _importService.ImportAsync(request.Pdf, userId, request.DryRun);
             return Ok(result);
+        }
+
+        /// <summary>
+        /// Cambia el estado de una receta (ABIERTA → CERRADA o ANULADA)
+        /// </summary>
+        [HttpPut("{id}/status")]
+        [Authorize]
+        public async Task<IActionResult> ChangeStatus(long id, [FromBody] ChangeRecipeStatusRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var userId = GetUserIdOrThrow();
+
+            // Aplicador solo puede cambiar sus propias recetas
+            if (User.IsInRole("Aplicador"))
+            {
+                var recipe = await _recipeService.GetRecipeByIdAsync(id);
+                if (recipe == null)
+                    return NotFound(new { error = $"No se encontró la receta con ID {id}" });
+                if (recipe.CreatedByUserId != userId)
+                    return Forbid();
+            }
+
+            await _recipeService.ChangeStatusAsync(id, request.Status, userId);
+            return Ok(new { message = $"Estado actualizado a {request.Status.ToUpper()}." });
         }
 
         private long GetUserIdOrThrow()
