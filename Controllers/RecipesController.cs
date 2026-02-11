@@ -1,6 +1,5 @@
-﻿using APIAgroConnect.Application.Interfaces;
+using APIAgroConnect.Application.Interfaces;
 using APIAgroConnect.Contracts.Requests;
-using APIAgroConnect.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -29,22 +28,13 @@ namespace APIAgroConnect.Controllers
         [Authorize]
         public async Task<IActionResult> GetRecipes([FromQuery] RecipeQueryRequest request)
         {
-            try
+            if (User.IsInRole("Aplicador"))
             {
-                // Si el usuario es Aplicador, solo ve sus propias recetas
-                if (User.IsInRole("Aplicador"))
-                {
-                    var userId = GetUserIdOrThrow();
-                    request.CreatedByUserId = userId;
-                }
+                request.CreatedByUserId = GetUserIdOrThrow();
+            }
 
-                var result = await _recipeService.GetRecipesAsync(request);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { error = ex.Message, detail = ex.ToString() });
-            }
+            var result = await _recipeService.GetRecipesAsync(request);
+            return Ok(result);
         }
 
         /// <summary>
@@ -54,27 +44,19 @@ namespace APIAgroConnect.Controllers
         [Authorize]
         public async Task<IActionResult> GetRecipeById(long id)
         {
-            try
+            var recipe = await _recipeService.GetRecipeByIdAsync(id);
+
+            if (recipe == null)
+                return NotFound(new { error = $"No se encontró la receta con ID {id}" });
+
+            if (User.IsInRole("Aplicador"))
             {
-                var recipe = await _recipeService.GetRecipeByIdAsync(id);
-
-                if (recipe == null)
-                    return NotFound(new { message = $"No se encontró la receta con ID {id}" });
-
-                // Aplicador solo puede ver sus propias recetas
-                if (User.IsInRole("Aplicador"))
-                {
-                    var userId = GetUserIdOrThrow();
-                    if (recipe.CreatedByUserId != userId)
-                        return Forbid();
-                }
-
-                return Ok(recipe);
+                var userId = GetUserIdOrThrow();
+                if (recipe.CreatedByUserId != userId)
+                    return Forbid();
             }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { error = ex.Message, detail = ex.ToString() });
-            }
+
+            return Ok(recipe);
         }
 
         [HttpPost("import-pdf")]
@@ -84,36 +66,22 @@ namespace APIAgroConnect.Controllers
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> ImportPdf([FromForm] ImportRecipePdfRequest request)
         {
-            try
-            {
-                var userId = GetUserIdOrThrow();
-
-                var result = await _importService.ImportAsync(request.Pdf, userId, request.DryRun);
-                return Ok(result);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { error = ex.Message, detail = ex.ToString() });
-            }
+            var userId = GetUserIdOrThrow();
+            var result = await _importService.ImportAsync(request.Pdf, userId, request.DryRun);
+            return Ok(result);
         }
 
         private long GetUserIdOrThrow()
         {
-            // 1) Intentar sub
             var sub = User.FindFirstValue("sub");
             if (!string.IsNullOrWhiteSpace(sub) && long.TryParse(sub, out var idFromSub))
                 return idFromSub;
 
-            // 2) Intentar NameIdentifier
             var nid = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!string.IsNullOrWhiteSpace(nid) && long.TryParse(nid, out var idFromNid))
                 return idFromNid;
 
-            throw new UnauthorizedAccessException("Token inválido: no trae claim sub ni NameIdentifier.");
+            throw new UnauthorizedAccessException("Token inválido.");
         }
     }
 }
