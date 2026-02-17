@@ -61,7 +61,7 @@ TaskScheduler.UnobservedTaskException += (sender, e) =>
 
 
 builder.Services.AddDbContext<AgroDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddScoped<JwtTokenService>();
