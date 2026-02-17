@@ -29,17 +29,19 @@ namespace APIAgroConnect.Application.Services
             _db = db;
         }
 
-        public async Task<GeoInsightsResponse> GetGeoInsightsAsync(long municipalityId, GeoInsightsRequest request)
+        public async Task<GeoInsightsResponse> GetGeoInsightsAsync(long? municipalityId, GeoInsightsRequest request)
         {
-            // 1. Obtener recetas asignadas a este municipio con sus relaciones
+            // 1. Obtener recetas (filtrar por municipio solo si se especifica)
             var query = _db.Recipes
-                .Where(r => r.AssignedMunicipalityId == municipalityId)
                 .Include(r => r.Lots).ThenInclude(l => l.Vertices)
                 .Include(r => r.Products)
                 .Include(r => r.SensitivePoints)
                 .Include(r => r.Advisor)
                 .Include(r => r.Requester)
                 .AsQueryable();
+
+            if (municipalityId.HasValue)
+                query = query.Where(r => r.AssignedMunicipalityId == municipalityId.Value);
 
             // Aplicar filtros
             if (request.DateFrom.HasValue)
@@ -165,13 +167,16 @@ namespace APIAgroConnect.Application.Services
             };
 
             // 6. Filtros disponibles (para poblar los selects del frontend)
-            // Obtener de TODAS las recetas del municipio (sin filtros aplicados)
-            var allRecipesBase = await _db.Recipes
-                .Where(r => r.AssignedMunicipalityId == municipalityId)
+            var allRecipesQuery = _db.Recipes
                 .Include(r => r.Products)
                 .Include(r => r.Advisor)
                 .AsNoTracking()
-                .ToListAsync();
+                .AsQueryable();
+
+            if (municipalityId.HasValue)
+                allRecipesQuery = allRecipesQuery.Where(r => r.AssignedMunicipalityId == municipalityId.Value);
+
+            var allRecipesBase = await allRecipesQuery.ToListAsync();
 
             var availableFilters = new GeoFiltersAvailable
             {

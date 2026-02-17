@@ -5,6 +5,6 @@ namespace APIAgroConnect.Application.Interfaces
 {
     public interface IGeoInsightsService
     {
-        Task<GeoInsightsResponse> GetGeoInsightsAsync(long municipalityId, GeoInsightsRequest request);
+        Task<GeoInsightsResponse> GetGeoInsightsAsync(long? municipalityId, GeoInsightsRequest request);
     }
 }

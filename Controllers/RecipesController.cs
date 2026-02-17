@@ -31,14 +31,15 @@ namespace APIAgroConnect.Controllers
         [Authorize(Roles = "Municipio,Admin")]
         public async Task<IActionResult> GetGeoInsights([FromQuery] GeoInsightsRequest request)
         {
-            long municipalityId;
+            long? municipalityId = null;
 
             if (User.IsInRole("Admin"))
             {
-                // Admin puede ver de cualquier municipio (por query param o todas)
+                // Admin puede ver de cualquier municipio, o todas si no especifica
                 var munIdParam = HttpContext.Request.Query["municipalityId"].FirstOrDefault();
-                if (string.IsNullOrEmpty(munIdParam) || !long.TryParse(munIdParam, out municipalityId))
-                    return BadRequest(new { error = "Admin debe especificar municipalityId." });
+                if (!string.IsNullOrEmpty(munIdParam) && long.TryParse(munIdParam, out var parsedId))
+                    municipalityId = parsedId;
+                // Si no especifica, municipalityId queda null → devuelve todo
             }
             else
             {
