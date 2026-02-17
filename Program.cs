@@ -61,7 +61,7 @@ TaskScheduler.UnobservedTaskException += (sender, e) =>
 
 
 builder.Services.AddDbContext<AgroDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddScoped<JwtTokenService>();
@@ -72,6 +72,7 @@ builder.Services.AddScoped<PdfLotsExtractor>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
 builder.Services.AddScoped<IMunicipalityService, MunicipalityService>();
 builder.Services.AddScoped<IInsightsService, InsightsService>();
+builder.Services.AddScoped<IGeoInsightsService, GeoInsightsService>();
 builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()!;

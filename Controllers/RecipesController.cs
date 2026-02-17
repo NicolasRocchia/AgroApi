@@ -12,13 +12,46 @@ namespace APIAgroConnect.Controllers
     {
         private readonly IRecipeImportService _importService;
         private readonly IRecipeService _recipeService;
+        private readonly IGeoInsightsService _geoInsightsService;
 
         public RecipesController(
             IRecipeImportService importService,
-            IRecipeService recipeService)
+            IRecipeService recipeService,
+            IGeoInsightsService geoInsightsService)
         {
             _importService = importService;
             _recipeService = recipeService;
+            _geoInsightsService = geoInsightsService;
+        }
+
+        /// <summary>
+        /// Obtiene datos geoespaciales para el mapa de fiscalización municipal
+        /// </summary>
+        [HttpGet("geo-insights")]
+        [Authorize(Roles = "Municipio,Admin")]
+        public async Task<IActionResult> GetGeoInsights([FromQuery] GeoInsightsRequest request)
+        {
+            long municipalityId;
+
+            if (User.IsInRole("Admin"))
+            {
+                // Admin puede ver de cualquier municipio (por query param o todas)
+                var munIdParam = HttpContext.Request.Query["municipalityId"].FirstOrDefault();
+                if (string.IsNullOrEmpty(munIdParam) || !long.TryParse(munIdParam, out municipalityId))
+                    return BadRequest(new { error = "Admin debe especificar municipalityId." });
+            }
+            else
+            {
+                // Municipio: solo ve lo que le corresponde
+                var userId = GetUserIdOrThrow();
+                var municipality = await _recipeService.GetMunicipalityByUserIdAsync(userId);
+                if (municipality == null)
+                    return BadRequest(new { error = "Usuario no tiene municipio asignado." });
+                municipalityId = municipality.Id;
+            }
+
+            var result = await _geoInsightsService.GetGeoInsightsAsync(municipalityId, request);
+            return Ok(result);
         }
 
         /// <summary>
@@ -36,10 +69,10 @@ namespace APIAgroConnect.Controllers
             {
                 var userId = GetUserIdOrThrow();
                 var municipality = await _recipeService.GetMunicipalityByUserIdAsync(userId);
-                
+
                 if (municipality == null)
                     return BadRequest(new { error = "Usuario no tiene municipio asignado." });
-                
+
                 request.MunicipalityId = municipality.Id;
             }
 
@@ -69,10 +102,10 @@ namespace APIAgroConnect.Controllers
             {
                 var userId = GetUserIdOrThrow();
                 var municipality = await _recipeService.GetMunicipalityByUserIdAsync(userId);
-                
+
                 if (municipality == null)
                     return BadRequest(new { error = "Usuario no tiene municipio asignado." });
-                
+
                 if (recipe.AssignedMunicipalityId != municipality.Id)
                     return Forbid();
             }
