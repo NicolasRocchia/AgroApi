@@ -1,3 +1,4 @@
+using APIAgroConnect.Application.Helpers;
 using APIAgroConnect.Application.Interfaces;
 using APIAgroConnect.Contracts.Requests;
 using APIAgroConnect.Contracts.Responses;
@@ -189,7 +190,10 @@ namespace APIAgroConnect.Application.Services
             recipe.UpdatedAt = DateTime.UtcNow;
             recipe.UpdatedByUserId = userId;
 
+            await StatusChangeContext.SetAsync(_context, StatusChangeContext.SOURCE_ASSIGN,
+                $"Asignada a municipio {municipality.Name}");
             await _context.SaveChangesAsync();
+            await StatusChangeContext.ClearAsync(_context);
         }
 
         public async Task ReviewRecipeAsync(long recipeId, ReviewRecipeRequest request, long municipalityId, long userId)
@@ -259,12 +263,11 @@ namespace APIAgroConnect.Application.Services
             recipe.UpdatedAt = DateTime.UtcNow;
             recipe.UpdatedByUserId = userId;
 
+            await StatusChangeContext.SetAsync(_context, StatusChangeContext.SOURCE_REVIEW,
+                $"{action}: {request.Observation ?? "sin observación"}");
             await _context.SaveChangesAsync();
+            await StatusChangeContext.ClearAsync(_context);
         }
-
-        // ─────────────────────────────────────────
-        // MENSAJES
-        // ─────────────────────────────────────────
 
         public async Task<RecipeMessageDto> SendMessageAsync(long recipeId, string message, long userId)
         {
@@ -279,11 +282,14 @@ namespace APIAgroConnect.Application.Services
             var roleName = user.UserRoles.FirstOrDefault()?.Role?.Name ?? "Desconocido";
 
             // Si es Aplicador respondiendo a OBSERVADA, volver a PENDIENTE
-            if (roleName == "Aplicador" && recipe.Status == "OBSERVADA")
+            var statusWillChange = roleName == "Aplicador" && recipe.Status == "OBSERVADA";
+            if (statusWillChange)
             {
                 recipe.Status = "PENDIENTE";
                 recipe.UpdatedAt = DateTime.UtcNow;
                 recipe.UpdatedByUserId = userId;
+                await StatusChangeContext.SetAsync(_context, StatusChangeContext.SOURCE_MESSAGE,
+                    "Aplicador respondió observación, vuelve a PENDIENTE");
             }
 
             var msg = new RecipeMessage
@@ -296,6 +302,9 @@ namespace APIAgroConnect.Application.Services
 
             _context.RecipeMessages.Add(msg);
             await _context.SaveChangesAsync();
+
+            if (statusWillChange)
+                await StatusChangeContext.ClearAsync(_context);
 
             return new RecipeMessageDto
             {

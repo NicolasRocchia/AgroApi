@@ -49,7 +49,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.TaxId).HasMaxLength(20);
 
                 b.Property(x => x.IsBlocked).HasDefaultValue(false).IsRequired();
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
 
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
@@ -85,7 +85,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.AccessLevel).HasDefaultValue((short)0).IsRequired();
                 b.Property(x => x.Description).HasMaxLength(300);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
                 b.HasOne<User>().WithMany()
@@ -112,7 +112,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.ToTable("UserRoles");
                 b.HasKey(x => new { x.UserId, x.RoleId });
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
 
                 b.HasOne(x => x.User)
                     .WithMany(u => u.UserRoles)
@@ -140,7 +140,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.Address).HasMaxLength(300);
                 b.Property(x => x.Contact).HasMaxLength(200);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
                 b.HasIndex(x => x.TaxId)
@@ -172,7 +172,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.LicenseNumber).HasMaxLength(50).IsRequired();
                 b.Property(x => x.Contact).HasMaxLength(200);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
                 b.HasIndex(x => x.LicenseNumber)
@@ -220,7 +220,7 @@ namespace APIAgroConnect.Infrastructure.Data
 
                 b.Property(x => x.WindDirection).HasMaxLength(50);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
                 b.HasIndex(x => x.RfdNumber)
@@ -273,7 +273,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.Latitude).HasPrecision(10, 7);
                 b.Property(x => x.Longitude).HasPrecision(10, 7);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
                 b.HasOne(x => x.User)
@@ -358,7 +358,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.ProductName).HasMaxLength(200).IsRequired();
                 b.Property(x => x.ToxicologicalClass).HasMaxLength(100);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
                 b.HasIndex(x => x.SenasaRegistry)
@@ -387,7 +387,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.DosePerUnit).HasMaxLength(30);
                 b.Property(x => x.TotalUnit).HasMaxLength(30);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
                 b.HasOne(x => x.Recipe)
@@ -418,7 +418,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.Department).HasMaxLength(150);
                 b.Property(x => x.SurfaceHa).HasPrecision(10, 2);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
                 b.HasOne(x => x.Recipe)
@@ -438,7 +438,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.Latitude).HasPrecision(10, 7);
                 b.Property(x => x.Longitude).HasPrecision(10, 7);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
 
                 b.HasOne(x => x.Lot)
                     .WithMany(l => l.Vertices)
@@ -448,6 +448,8 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.HasIndex(x => new { x.LotId, x.Order })
                     .IsUnique()
                     .HasFilter("[DeletedAt] IS NULL");
+
+                b.HasQueryFilter(x => x.DeletedAt == null);
             });
 
             /* ==========================================================
@@ -466,7 +468,7 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.Locality).HasMaxLength(150);
                 b.Property(x => x.Department).HasMaxLength(150);
 
-                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysdatetime()").IsRequired();
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
                 b.HasOne(x => x.Recipe)

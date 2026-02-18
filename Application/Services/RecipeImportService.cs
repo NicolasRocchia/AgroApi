@@ -1,4 +1,5 @@
-﻿using APIAgroConnect.Application.Interfaces;
+﻿using APIAgroConnect.Application.Helpers;
+using APIAgroConnect.Application.Interfaces;
 using APIAgroConnect.Contracts.Models;
 using APIAgroConnect.Domain.Entities;
 using APIAgroConnect.Infrastructure.Data;
@@ -104,6 +105,10 @@ namespace APIAgroConnect.Application.Services
             // ✅ Hardening: nunca permitir null/empty en Status (DB: NOT NULL)
             recipe.Status = string.IsNullOrWhiteSpace(recipe.Status) ? "ABIERTA" : recipe.Status.Trim();
 
+            // ✅ Set SESSION_CONTEXT for trigger audit trail
+            await StatusChangeContext.SetAsync(_db, StatusChangeContext.SOURCE_IMPORT,
+                $"Import PDF - RFD {parsed.RfdNumber}");
+
             // Guardar receta (si es nueva, se inserta acá con Status ya seteado)
             await _db.SaveChangesAsync();
 
@@ -112,6 +117,7 @@ namespace APIAgroConnect.Application.Services
             await AddChildrenFromParsedAsync(recipe, parsed, now, actorUserId);
 
             await _db.SaveChangesAsync();
+            await StatusChangeContext.ClearAsync(_db);
             await tx.CommitAsync();
 
             return new
