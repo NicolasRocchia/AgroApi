@@ -35,7 +35,7 @@ namespace APIAgroConnect.Application.Services
             var query = _db.Recipes
                 .Include(r => r.Lots).ThenInclude(l => l.Vertices)
                 .Include(r => r.Products)
-                .Include(r => r.SensitivePoints)
+                .Include(r => r.SensitivePointMappings).ThenInclude(m => m.SensitivePoint)
                 .Include(r => r.Advisor)
                 .Include(r => r.Requester)
                 .AsQueryable();
@@ -110,9 +110,11 @@ namespace APIAgroConnect.Application.Services
                     });
                 }
 
-                // Recopilar puntos sensibles (deduplicar por ID)
-                foreach (var sp in recipe.SensitivePoints)
+                // Recopilar puntos sensibles (dedup real — master table IDs)
+                foreach (var mapping in recipe.SensitivePointMappings)
                 {
+                    var sp = mapping.SensitivePoint;
+                    if (sp == null) continue;
                     if (!allSensitivePoints.ContainsKey(sp.Id))
                     {
                         allSensitivePoints[sp.Id] = new GeoSensitivePointDto

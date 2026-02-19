@@ -195,7 +195,8 @@ namespace APIAgroConnect.Application.Services
                     .ThenInclude(p => p.Product)
                 .Include(r => r.Lots)
                     .ThenInclude(l => l.Vertices.OrderBy(v => v.Order))
-                .Include(r => r.SensitivePoints)
+                .Include(r => r.SensitivePointMappings)
+                    .ThenInclude(m => m.SensitivePoint)
                 .Include(r => r.AssignedMunicipality)
                 .Include(r => r.ReviewLogs)
                     .ThenInclude(rl => rl.Municipality)
@@ -309,15 +310,17 @@ namespace APIAgroConnect.Application.Services
                     }).ToList()
                 }).ToList(),
 
-                SensitivePoints = recipe.SensitivePoints.Select(sp => new RecipeSensitivePointDto
+                SensitivePoints = recipe.SensitivePointMappings
+                    .Where(m => m.SensitivePoint != null)
+                    .Select(m => new RecipeSensitivePointDto
                 {
-                    Id = sp.Id,
-                    Name = sp.Name,
-                    Type = sp.Type,
-                    Latitude = sp.Latitude,
-                    Longitude = sp.Longitude,
-                    Locality = sp.Locality,
-                    Department = sp.Department
+                    Id = m.SensitivePoint.Id,
+                    Name = m.SensitivePoint.Name,
+                    Type = m.SensitivePoint.Type,
+                    Latitude = m.SensitivePoint.Latitude,
+                    Longitude = m.SensitivePoint.Longitude,
+                    Locality = m.SensitivePoint.Locality,
+                    Department = m.SensitivePoint.Department
                 }).ToList(),
 
                 CreatedAt = recipe.CreatedAt,

@@ -19,7 +19,8 @@ namespace APIAgroConnect.Infrastructure.Data
         public DbSet<RecipeProduct> RecipeProducts => Set<RecipeProduct>();
         public DbSet<RecipeLot> RecipeLots => Set<RecipeLot>();
         public DbSet<RecipeLotVertex> RecipeLotVertices => Set<RecipeLotVertex>();
-        public DbSet<RecipeSensitivePoint> RecipeSensitivePoints => Set<RecipeSensitivePoint>();
+        public DbSet<SensitivePoint> SensitivePoints => Set<SensitivePoint>();
+        public DbSet<RecipeSensitivePointMap> RecipeSensitivePointMaps => Set<RecipeSensitivePointMap>();
 
         // ✅ Catálogo global
         public DbSet<Product> Products => Set<Product>();
@@ -455,9 +456,10 @@ namespace APIAgroConnect.Infrastructure.Data
             /* ==========================================================
              * RECIPE SENSITIVE POINTS
              * ========================================================== */
-            modelBuilder.Entity<RecipeSensitivePoint>(b =>
+            // ── SENSITIVE POINTS (tabla maestra) ──
+            modelBuilder.Entity<SensitivePoint>(b =>
             {
-                b.ToTable("RecipeSensitivePoints");
+                b.ToTable("SensitivePoints");
                 b.HasKey(x => x.Id);
 
                 b.Property(x => x.Latitude).HasPrecision(10, 7);
@@ -471,9 +473,28 @@ namespace APIAgroConnect.Infrastructure.Data
                 b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
                 b.HasQueryFilter(x => x.DeletedAt == null);
 
+                // Unique: mismo nombre + coordenadas redondeadas a 4 decimales (~11m)
+                b.HasIndex(x => new { x.Name, x.Latitude, x.Longitude })
+                    .IsUnique()
+                    .HasDatabaseName("UQ_SensitivePoints_Name_Coords");
+            });
+
+            // ── RECIPE ↔ SENSITIVE POINT (N:M join table) ──
+            modelBuilder.Entity<RecipeSensitivePointMap>(b =>
+            {
+                b.ToTable("RecipeSensitivePointMap");
+                b.HasKey(x => new { x.RecipeId, x.SensitivePointId });
+
+                b.Property(x => x.CreatedAt).HasDefaultValueSql("sysutcdatetime()").IsRequired();
+
                 b.HasOne(x => x.Recipe)
-                    .WithMany(r => r.SensitivePoints)
+                    .WithMany(r => r.SensitivePointMappings)
                     .HasForeignKey(x => x.RecipeId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasOne(x => x.SensitivePoint)
+                    .WithMany(sp => sp.RecipeMappings)
+                    .HasForeignKey(x => x.SensitivePointId)
                     .OnDelete(DeleteBehavior.NoAction);
             });
         }

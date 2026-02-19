@@ -70,7 +70,7 @@ namespace APIAgroConnect.Application.Services
                 .IgnoreQueryFilters()
                 .Include(r => r.Products) // RecipeProducts
                 .Include(r => r.Lots).ThenInclude(l => l.Vertices)
-                .Include(r => r.SensitivePoints)
+                .Include(r => r.SensitivePointMappings)
                 .FirstOrDefaultAsync(r => r.RfdNumber == parsed.RfdNumber);
 
             if (recipe is null)
@@ -82,7 +82,7 @@ namespace APIAgroConnect.Application.Services
                     CreatedByUserId = actorUserId,
                     Products = new List<RecipeProduct>(),
                     Lots = new List<RecipeLot>(),
-                    SensitivePoints = new List<RecipeSensitivePoint>()
+                    SensitivePointMappings = new List<RecipeSensitivePointMap>()
                 };
                 _db.Recipes.Add(recipe);
             }
@@ -337,11 +337,10 @@ namespace APIAgroConnect.Application.Services
                 }
             }
 
-            foreach (var sp in recipe.SensitivePoints)
+            // Sensitive point mappings: just remove old links (master records persist)
+            foreach (var mapping in recipe.SensitivePointMappings.ToList())
             {
-                if (sp.DeletedAt != null) continue;
-                sp.DeletedAt = now;
-                sp.DeletedByUserId = actorUserId;
+                recipe.SensitivePointMappings.Remove(mapping);
             }
         }
 
@@ -401,21 +400,68 @@ namespace APIAgroConnect.Application.Services
                 recipe.Lots.Add(lot);
             }
 
-            // Puntos sensibles
+            // Puntos sensibles: upsert en tabla maestra + crear mapping
             foreach (var sp in parsed.SensitivePoints)
             {
-                recipe.SensitivePoints.Add(new RecipeSensitivePoint
+                var masterPoint = await UpsertSensitivePointAsync(sp, actorUserId, now);
+
+                recipe.SensitivePointMappings.Add(new RecipeSensitivePointMap
                 {
-                    Name = sp.Name,
-                    Type = sp.Type,
-                    Locality = sp.Locality,
-                    Department = sp.Department,
-                    Latitude = sp.Latitude,
-                    Longitude = sp.Longitude,
-                    CreatedAt = now,
-                    CreatedByUserId = actorUserId
+                    SensitivePointId = masterPoint.Id,
+                    CreatedAt = now
                 });
             }
+        }
+
+        /// <summary>
+        /// Find or create a SensitivePoint in the master table.
+        /// Matches by Name + rounded coordinates (~11m precision).
+        /// </summary>
+        private async Task<SensitivePoint> UpsertSensitivePointAsync(
+            ParsedSensitivePoint parsed, long actorUserId, DateTime now)
+        {
+            // Round to 4 decimal places (~11m precision) for dedup matching
+            var roundedLat = Math.Round(parsed.Latitude, 4);
+            var roundedLng = Math.Round(parsed.Longitude, 4);
+
+            var existing = await _db.SensitivePoints
+                .FirstOrDefaultAsync(sp =>
+                    sp.Name == parsed.Name &&
+                    Math.Abs(sp.Latitude - roundedLat) < 0.00015m &&
+                    Math.Abs(sp.Longitude - roundedLng) < 0.00015m);
+
+            if (existing != null)
+            {
+                // Update metadata if richer data available
+                if (existing.Type == null && parsed.Type != null)
+                {
+                    existing.Type = parsed.Type;
+                    existing.UpdatedAt = now;
+                    existing.UpdatedByUserId = actorUserId;
+                }
+                if (existing.Locality == null && parsed.Locality != null)
+                    existing.Locality = parsed.Locality;
+                if (existing.Department == null && parsed.Department != null)
+                    existing.Department = parsed.Department;
+
+                return existing;
+            }
+
+            var newPoint = new SensitivePoint
+            {
+                Name = parsed.Name,
+                Type = parsed.Type,
+                Locality = parsed.Locality,
+                Department = parsed.Department,
+                Latitude = roundedLat,
+                Longitude = roundedLng,
+                CreatedAt = now,
+                CreatedByUserId = actorUserId
+            };
+
+            _db.SensitivePoints.Add(newPoint);
+            await _db.SaveChangesAsync(); // Need ID for mapping
+            return newPoint;
         }
     }
 }
